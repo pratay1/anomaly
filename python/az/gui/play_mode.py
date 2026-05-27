@@ -6,7 +6,7 @@ from pathlib import Path
 import chess
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor, QPen
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
 
 import az._az_core as core
 from az.brain import align_cfg_with_brain, load_brain, resolve_brain_path
@@ -102,12 +102,15 @@ class PlayVsNetDialog(QDialog):
             move = chess.Move(from_sq, sq)
             if move in self.ch.legal_moves:
                 self._apply_human_move(move)
-            else:
-                for promo in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]:
+            elif self._is_promotion_attempt(from_sq, sq):
+                promo = self._ask_promotion_piece()
+                if promo is not None:
                     pm = chess.Move(from_sq, sq, promotion=promo)
                     if pm in self.ch.legal_moves:
                         self._apply_human_move(pm)
                         return
+                self.status_label.setText("Promotion cancelled — select your piece")
+            else:
                 p = self.ch.piece_at(sq)
                 if p and p.color == self.ch.turn:
                     self._selected_sq = sq
@@ -116,6 +119,34 @@ class PlayVsNetDialog(QDialog):
                 else:
                     self._selected_sq = None
                     self.status_label.setText("Illegal move — select your piece")
+
+    def _is_promotion_attempt(self, from_sq: int, to_sq: int) -> bool:
+        p = self.ch.piece_at(from_sq)
+        if not p or p.piece_type != chess.PAWN:
+            return False
+        promo_rank = 7 if p.color == chess.WHITE else 0
+        return chess.square_rank(to_sq) == promo_rank
+
+    def _ask_promotion_piece(self) -> int | None:
+        box = QMessageBox(self)
+        box.setWindowTitle("Promote pawn")
+        box.setText("Choose promotion piece:")
+        queen = box.addButton("Queen", QMessageBox.ButtonRole.AcceptRole)
+        rook = box.addButton("Rook", QMessageBox.ButtonRole.AcceptRole)
+        bishop = box.addButton("Bishop", QMessageBox.ButtonRole.AcceptRole)
+        knight = box.addButton("Knight", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == queen:
+            return chess.QUEEN
+        if clicked == rook:
+            return chess.ROOK
+        if clicked == bishop:
+            return chess.BISHOP
+        if clicked == knight:
+            return chess.KNIGHT
+        return None
 
     def _apply_human_move(self, move: chess.Move) -> None:
         uci = move.uci()

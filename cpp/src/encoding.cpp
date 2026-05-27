@@ -169,6 +169,18 @@ Move index_to_move(const Board& board, int index) {
   m.from = from;
   m.to = sq(f0 + DIRS[dir][0] * dist, r0 + DIRS[dir][1] * dist);
   m.piece = board.at(from);
+  if (type_of(m.piece) == PieceType::Pawn) {
+    int promo_rank = board.side_to_move() == Color::White ? 7 : 0;
+    if (rank_of(m.to) == promo_rank) {
+      m.promotion = PieceType::Queen;
+      m.flag = MoveFlag::Promotion;
+      Piece cap = board.at(m.to);
+      if (cap != Piece::None) {
+        m.captured = cap;
+        m.flag = MoveFlag::Promotion;
+      }
+    }
+  }
   return m;
 }
 

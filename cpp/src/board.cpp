@@ -265,12 +265,10 @@ void Board::generate_legal_moves(std::vector<Move>& out) const {
 }
 
 bool Board::is_legal(const Move& m) const {
+  if (type_of(at(m.to)) == PieceType::King) return false;
   Board copy = *this;
-  if (!copy.in_check(stm_)) {
-    // ok
-  }
   copy.make_move(m);
-  Color mover = stm_ == Color::White ? Color::White : Color::Black;
+  Color mover = stm_;
   return !copy.in_check(mover);
 }
 
@@ -386,48 +384,49 @@ void Board::unmake_move(const Move& m) {
   place(moving, m.from);
 }
 
+bool Board::square_attacked(int square, Color by) const {
+  Bitboard occ = occupancy();
+  Bitboard target = bit(square);
+
+  Bitboard kn = pieces(by, PieceType::Knight);
+  while (kn) {
+    if (knight_attacks(pop_lsb(kn)) & target) return true;
+  }
+
+  Bitboard bishops = pieces(by, PieceType::Bishop) | pieces(by, PieceType::Queen);
+  while (bishops) {
+    if (bishop_attacks(pop_lsb(bishops), occ) & target) return true;
+  }
+
+  Bitboard rooks = pieces(by, PieceType::Rook) | pieces(by, PieceType::Queen);
+  while (rooks) {
+    if (rook_attacks(pop_lsb(rooks), occ) & target) return true;
+  }
+
+  Bitboard pawns = pieces(by, PieceType::Pawn);
+  uint64_t pawn_attacks = 0;
+  if (by == Color::Black) {
+    if (square % 8 > 0) pawn_attacks |= bit(square - 9);
+    if (square % 8 < 7) pawn_attacks |= bit(square - 7);
+  } else {
+    if (square % 8 > 0) pawn_attacks |= bit(square + 7);
+    if (square % 8 < 7) pawn_attacks |= bit(square + 9);
+  }
+  if (pawns & pawn_attacks) return true;
+
+  Bitboard kings = pieces(by, PieceType::King);
+  while (kings) {
+    if (king_attacks(pop_lsb(kings)) & target) return true;
+  }
+  return false;
+}
+
 bool Board::in_check(Color c) const {
   Bitboard kings = pieces(c, PieceType::King);
   if (!kings) return false;
   int king_sq = ctz(kings);
   Color enemy = c == Color::White ? Color::Black : Color::White;
-  Bitboard occ = occupancy();
-
-  Bitboard kn = pieces(enemy, PieceType::Knight);
-  while (kn) {
-    int s = pop_lsb(kn);
-    if (knight_attacks(s) & bit(king_sq)) return true;
-  }
-
-  Bitboard bishops = pieces(enemy, PieceType::Bishop) | pieces(enemy, PieceType::Queen);
-  while (bishops) {
-    int s = pop_lsb(bishops);
-    if (bishop_attacks(s, occ) & bit(king_sq)) return true;
-  }
-
-  Bitboard rooks = pieces(enemy, PieceType::Rook) | pieces(enemy, PieceType::Queen);
-  while (rooks) {
-    int s = pop_lsb(rooks);
-    if (rook_attacks(s, occ) & bit(king_sq)) return true;
-  }
-
-  Bitboard pawns = pieces(enemy, PieceType::Pawn);
-  uint64_t attacks = 0;
-  if (c == Color::White) {
-    if (king_sq % 8 > 0) attacks |= bit(king_sq - 9);
-    if (king_sq % 8 < 7) attacks |= bit(king_sq - 7);
-  } else {
-    if (king_sq % 8 > 0) attacks |= bit(king_sq + 7);
-    if (king_sq % 8 < 7) attacks |= bit(king_sq + 9);
-  }
-  if (pawns & attacks) return true;
-
-  Bitboard kings_e = pieces(enemy, PieceType::King);
-  while (kings_e) {
-    int s = pop_lsb(kings_e);
-    if (king_attacks(s) & bit(king_sq)) return true;
-  }
-  return false;
+  return square_attacked(king_sq, enemy);
 }
 
 bool Board::is_checkmate() const {
@@ -484,6 +483,8 @@ bool Board::is_draw() const {
 }
 
 GameResult Board::result() const {
+  if (!pieces(Color::White, PieceType::King)) return GameResult::BlackWin;
+  if (!pieces(Color::Black, PieceType::King)) return GameResult::WhiteWin;
   if (is_checkmate()) return stm_ == Color::White ? GameResult::BlackWin : GameResult::WhiteWin;
   if (is_draw()) return GameResult::Draw;
   return GameResult::Ongoing;

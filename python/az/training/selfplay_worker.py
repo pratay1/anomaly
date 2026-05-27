@@ -109,6 +109,8 @@ def play_one_game(
             idx = rng.choices(legal, weights=weights)[0]
 
         mv = core.index_to_move(board, idx)
+        if not board.is_legal(mv):
+            break
         uci = move_to_uci(mv)
         move_evt = MovePlayed(
             fen=fen,

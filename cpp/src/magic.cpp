@@ -58,9 +58,9 @@ uint64_t compute_king_attacks(int square) {
 }
 
 // Blocker masks (relevant squares, excluding edge squares)
-uint64_t rook_mask(int sq) {
+uint64_t rook_mask(int square) {
   uint64_t result = 0;
-  int f = file_of(sq), r = rank_of(sq);
+  int f = file_of(square), r = rank_of(square);
   for (int nf = f + 1; nf < 7; ++nf) result |= bit(sq(nf, r));
   for (int nf = f - 1; nf > 0; --nf) result |= bit(sq(nf, r));
   for (int nr = r + 1; nr < 7; ++nr) result |= bit(sq(f, nr));
@@ -68,9 +68,9 @@ uint64_t rook_mask(int sq) {
   return result;
 }
 
-uint64_t bishop_mask(int sq) {
+uint64_t bishop_mask(int square) {
   uint64_t result = 0;
-  int f = file_of(sq), r = rank_of(sq);
+  int f = file_of(square), r = rank_of(square);
   for (int i = 1; f + i < 7 && r + i < 7; ++i) result |= bit(sq(f + i, r + i));
   for (int i = 1; f - i > 0 && r + i < 7; ++i) result |= bit(sq(f - i, r + i));
   for (int i = 1; f + i < 7 && r - i > 0; ++i) result |= bit(sq(f + i, r - i));
