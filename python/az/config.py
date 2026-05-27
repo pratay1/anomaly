@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from az.training.stockfish_paths import resolve_stockfish_path
+
 
 @dataclass
 class Config:
@@ -25,9 +27,7 @@ class Config:
     games_per_iteration: int = 4
     max_game_length: int = 120
     training_opponent: str = "self"  # "self" or "stockfish"
-    stockfish_path: Path = field(
-        default_factory=lambda: Path("stockfish")
-    )
+    stockfish_path: Path = field(default_factory=resolve_stockfish_path)
     stockfish_movetime_ms: int = 50
 
     # Training

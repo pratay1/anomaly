@@ -7,6 +7,7 @@ import chess.engine
 
 import az._az_core as core
 from az.config import Config
+from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_error
 
 
 def _sq_uci(sq: int) -> str:
@@ -42,7 +43,11 @@ class StockfishEngine:
             self._engine = None
         path = Path(self.cfg.stockfish_path)
         if not path.is_file():
-            raise FileNotFoundError(f"Stockfish not found at {path}")
+            path = resolve_stockfish_path()
+            self.cfg.stockfish_path = path
+        err = stockfish_path_error(path)
+        if err:
+            raise FileNotFoundError(err)
         self._engine = chess.engine.SimpleEngine.popen_uci(str(path))
         return self._engine
 

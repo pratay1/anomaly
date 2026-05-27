@@ -16,8 +16,9 @@ from az.ipc.events import ArenaResult, CheckpointSaved, IterationComplete
 from az.network.resnet import AlphaZeroResNet
 from az.training.central_learner import CentralLearner
 from az.training.inference_server import InferenceServer
-from az.training.selfplay_worker import ParallelSelfPlayPool
 from az.training.replay_buffer import ReplayBuffer
+from az.training.selfplay_worker import ParallelSelfPlayPool
+from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_error
 
 try:
     from PyQt6.QtCore import QObject, QThread, pyqtSignal
@@ -36,6 +37,7 @@ class TrainerOrchestrator(QObject):
     move_played = pyqtSignal(object)
     game_finished = pyqtSignal(object)
     mcts_visits = pyqtSignal(str, list)
+    training_error = pyqtSignal(str)
 
     def __init__(self, cfg: Config):
         super().__init__()
@@ -77,7 +79,12 @@ class TrainerOrchestrator(QObject):
                     break
                 n_games = self.cfg.games_per_selfplay_iteration()
                 self.cfg.games_per_iteration = n_games
-                self.selfplay.run_iteration(n_games)
+                try:
+                    self.selfplay.run_iteration(n_games)
+                except Exception as exc:
+                    self.training_error.emit(str(exc))
+                    time.sleep(1.0)
+                    continue
                 if self.stop_event.is_set():
                     break
                 self.learner.train_iteration(self.cfg.train_steps_per_iteration)
@@ -136,6 +143,22 @@ class TrainerOrchestrator(QObject):
 
     def stop(self) -> None:
         self.stop_event.set()
+        if self.selfplay is not None:
+            self.selfplay._close_stockfish()
+
+    def set_training_opponent(self, opponent: str) -> str | None:
+        """Switch training mode at runtime. Returns an error message on failure."""
+        if opponent == "stockfish":
+            self.cfg.stockfish_path = resolve_stockfish_path()
+            err = stockfish_path_error(self.cfg.stockfish_path)
+            if err:
+                return err
+        if self.selfplay is not None:
+            self.selfplay.set_training_opponent(opponent)
+        else:
+            self.cfg.training_opponent = opponent
+        self.cfg.games_per_iteration = self.cfg.games_per_selfplay_iteration()
+        return None
 
     def flush_selfplay_events(self) -> int:
         """Drain worker event queue and emit Qt signals on the caller thread."""

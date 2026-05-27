@@ -11,6 +11,7 @@ from az.config import Config
 from az.ipc.events import GameFinished, MovePlayed
 from az.training.replay_buffer import ReplayBuffer
 from az.training.stockfish import StockfishEngine
+from az.training.stockfish_paths import stockfish_path_error
 
 try:
     from PyQt6.QtCore import QObject, pyqtSignal
@@ -235,9 +236,27 @@ class ParallelSelfPlayPool:
             self._game_seq += 1
             return seq
 
-    def _stockfish_engine(self) -> StockfishEngine | None:
+    def _close_stockfish(self) -> None:
+        if self._stockfish is not None:
+            self._stockfish.close()
+            self._stockfish = None
+
+    def set_training_opponent(self, opponent: str) -> None:
+        """Switch between self-play and Stockfish; releases the engine when leaving Stockfish."""
+        if opponent not in ("self", "stockfish"):
+            raise ValueError(f"training_opponent must be 'self' or 'stockfish', got {opponent!r}")
+        if self.cfg.training_opponent == opponent:
+            return
+        self.cfg.training_opponent = opponent
+        if opponent != "stockfish":
+            self._close_stockfish()
+
+    def _stockfish_engine(self) -> StockfishEngine:
         if self.cfg.training_opponent != "stockfish":
-            return None
+            raise RuntimeError("Stockfish engine requested outside Stockfish training mode")
+        err = stockfish_path_error(self.cfg.stockfish_path)
+        if err:
+            raise FileNotFoundError(err)
         if self._stockfish is None:
             with self._game_seq_lock:
                 if self._stockfish is None:
@@ -261,6 +280,10 @@ class ParallelSelfPlayPool:
         if self.stop_event.is_set():
             return []
 
+        stockfish_engine: StockfishEngine | None = None
+        if stockfish_mode:
+            stockfish_engine = self._stockfish_engine()
+
         all_examples: list = []
         event_queue: queue.Queue = queue.Queue()
 
@@ -277,7 +300,7 @@ class ParallelSelfPlayPool:
                 rng=rng,
                 event_sink=event_queue,
                 game_seq=game_seq,
-                stockfish=self._stockfish_engine(),
+                stockfish=stockfish_engine,
             )
 
         if stockfish_mode:
