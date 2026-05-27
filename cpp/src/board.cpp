@@ -404,15 +404,15 @@ bool Board::square_attacked(int square, Color by) const {
   }
 
   Bitboard pawns = pieces(by, PieceType::Pawn);
-  uint64_t pawn_attacks = 0;
+  uint64_t pawn_origins = 0;
   if (by == Color::Black) {
-    if (square % 8 > 0) pawn_attacks |= bit(square - 9);
-    if (square % 8 < 7) pawn_attacks |= bit(square - 7);
+    if (square % 8 > 0) pawn_origins |= bit(square + 7);
+    if (square % 8 < 7) pawn_origins |= bit(square + 9);
   } else {
-    if (square % 8 > 0) pawn_attacks |= bit(square + 7);
-    if (square % 8 < 7) pawn_attacks |= bit(square + 9);
+    if (square % 8 > 0) pawn_origins |= bit(square - 9);
+    if (square % 8 < 7) pawn_origins |= bit(square - 7);
   }
-  if (pawns & pawn_attacks) return true;
+  if (pawns & pawn_origins) return true;
 
   Bitboard kings = pieces(by, PieceType::King);
   while (kings) {

@@ -188,14 +188,12 @@ void init_magics() {
 
 uint64_t rook_attacks(int square, uint64_t occupied) {
   init_magics();
-  MagicEntry& e = rook_magics[square];
-  return e.attacks[((occupied & e.mask) * e.magic) >> e.shift];
+  return slide_attacks(square, occupied, rook_dirs);
 }
 
 uint64_t bishop_attacks(int square, uint64_t occupied) {
   init_magics();
-  MagicEntry& e = bishop_magics[square];
-  return e.attacks[((occupied & e.mask) * e.magic) >> e.shift];
+  return slide_attacks(square, occupied, bishop_dirs);
 }
 
 uint64_t knight_attacks(int square) {

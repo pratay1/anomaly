@@ -13,7 +13,6 @@ from az.brain import align_cfg_with_brain, load_brain, resolve_brain_path
 from az.config import Config
 from az.gui.board_view import BoardView
 from az.gui.piece_assets import PieceAssetManager
-
 from az.network.resnet import AlphaZeroResNet
 from az.training.inference_server import InferenceServer
 from az.training.selfplay_worker import move_to_uci
@@ -115,7 +114,8 @@ class PlayVsNetDialog(QDialog):
                 if p and p.color == self.ch.turn:
                     self._selected_sq = sq
                     self._highlight_square(sq)
-                    self.status_label.setText(f"Selected {chess.square_name(sq)} — pick destination")
+                    name = chess.square_name(sq)
+                    self.status_label.setText(f"Selected {name} — pick destination")
                 else:
                     self._selected_sq = None
                     self.status_label.setText("Illegal move — select your piece")

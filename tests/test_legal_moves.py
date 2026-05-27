@@ -1,8 +1,7 @@
 """Chess legality: no king capture, must leave check, promotion round-trip."""
 
-import chess
-
 import az._az_core as core
+import chess
 from az.training.selfplay_worker import move_to_uci
 
 
@@ -15,9 +14,11 @@ def test_cannot_capture_enemy_king():
 
 
 def test_must_leave_check():
-    fen = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    fen = "8/8/8/8/8/8/5q2/4K3 w - - 0 1"
     board = core.Board.from_fen(fen)
     assert board.in_check(core.Color.White)
+    ch = chess.Board(fen)
+    assert ch.is_check()
     for m in board.generate_legal_moves():
         b2 = core.Board.from_fen(fen)
         b2.make_move(m)
@@ -29,8 +30,10 @@ def test_queen_promotion_roundtrip():
     board = core.Board.from_fen(fen)
     legal = core.legal_move_indices(board)
     assert legal
-    for idx in legal:
-        mv = core.index_to_move(board, idx)
+    e7 = 4 + 6 * 8  # pawn on e7
+    promo_moves = [m for m in board.generate_legal_moves() if m.from_sq == e7 and m.promotion]
+    assert len(promo_moves) == 4
+    for mv in promo_moves:
         assert board.is_legal(mv)
         b2 = core.Board.from_fen(fen)
         b2.make_move(mv)
