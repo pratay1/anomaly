@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import queue
+import threading
+from unittest.mock import MagicMock, patch
+
+import az._az_core as core
+from az.config import Config
+from az.training.selfplay_worker import ParallelSelfPlayPool, play_one_game
+from az.training.replay_buffer import ReplayBuffer
+
+
+def test_play_one_game_stockfish_only_records_mcts_plies():
+    cfg = Config()
+    cfg.training_opponent = "stockfish"
+    cfg.max_game_length = 4
+    cfg.temperature_moves = 0
+    cfg.num_simulations = 2
+    stop = threading.Event()
+    queue_inf = core.InferenceQueue()
+    events: queue.Queue = queue.Queue()
+
+    stockfish = MagicMock()
+    stockfish_moves = ["e7e5", "d7d5"]
+
+    def fake_choose(board: core.Board) -> core.Move:
+        uci = stockfish_moves.pop(0)
+        for idx in core.legal_move_indices(board):
+            mv = core.index_to_move(board, idx)
+            from az.training.selfplay_worker import move_to_uci
+
+            if move_to_uci(mv) == uci:
+                return mv
+        raise AssertionError(f"unexpected stockfish move {uci}")
+
+    stockfish.choose_move.side_effect = fake_choose
+
+    with patch("az.training.selfplay_worker.core.MCTS") as mock_mcts_cls:
+        mock_mcts = MagicMock()
+        mock_mcts.run.return_value = [0.0] * cfg.policy_size
+        mock_mcts.root_visits.return_value = []
+        mock_mcts_cls.return_value = mock_mcts
+
+        examples = play_one_game(
+            queue_inf,
+            cfg,
+            stop,
+            game_id=0,
+            game_seq=0,
+            stockfish=stockfish,
+            event_sink=events,
+        )
+
+    assert len(examples) == 2
+    assert stockfish.choose_move.call_count == 2
+    move_events = [payload[0] for kind, *payload in _drain(events) if kind == "move_played"]
+    assert len(move_events) == 4
+
+
+def test_game_seq_alternates_mcts_color():
+    cfg = Config()
+    cfg.training_opponent = "stockfish"
+    stop = threading.Event()
+    queue_inf = core.InferenceQueue()
+    stockfish = MagicMock()
+
+    seen_colors: list[int] = []
+
+    def fake_run(board, temp):
+        seen_colors.append(board.side_to_move())
+        pi = [0.0] * cfg.policy_size
+        legal = core.legal_move_indices(board)
+        if legal:
+            pi[legal[0]] = 1.0
+        return pi
+
+    def fake_stockfish_move(board: core.Board) -> core.Move:
+        legal = core.legal_move_indices(board)
+        return core.index_to_move(board, legal[0])
+
+    stockfish.choose_move.side_effect = fake_stockfish_move
+
+    with patch("az.training.selfplay_worker.core.MCTS") as mock_mcts_cls:
+        mock_mcts = MagicMock()
+        mock_mcts.run.side_effect = fake_run
+        mock_mcts.root_visits.return_value = []
+        mock_mcts_cls.return_value = mock_mcts
+
+        cfg.max_game_length = 1
+        play_one_game(
+            queue_inf, cfg, stop, game_seq=0, stockfish=stockfish
+        )
+        cfg.max_game_length = 2
+        play_one_game(
+            queue_inf, cfg, stop, game_seq=1, stockfish=stockfish
+        )
+
+    assert seen_colors == [core.Color.White, core.Color.Black]
+
+
+def test_stockfish_mode_runs_one_serial_game():
+    cfg = Config()
+    cfg.num_workers = 3
+    cfg.training_opponent = "stockfish"
+    stop = threading.Event()
+    queue_inf = core.InferenceQueue()
+    buf = ReplayBuffer(1000, cfg.encoding_channels * 64, cfg.policy_size)
+    pool = ParallelSelfPlayPool(queue_inf, buf, cfg, stop)
+
+    call_count = 0
+
+    def fake_play(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return []
+
+    with patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play):
+        pool.run_iteration(3)
+
+    assert call_count == 1
+    assert cfg.games_per_selfplay_iteration() == 1
+
+
+def _drain(q: queue.Queue) -> list:
+    items = []
+    while True:
+        try:
+            items.append(q.get_nowait())
+        except queue.Empty:
+            break
+    return items

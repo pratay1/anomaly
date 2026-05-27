@@ -1,0 +1,62 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "alphazero-chess"
+version = "0.1.0"
+description = "AlphaZero-style chess with C++ core and PyQt6 training GUI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "numpy>=1.24",
+    "PyQt6>=6.5",
+    "pyqtgraph>=0.13",
+    "platformdirs>=3.0",
+    "python-chess>=1.999",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-qt>=4.2", "ruff>=0.8", "mypy>=1.13"]
+package = ["pyinstaller>=6.0"]
+
+[project.scripts]
+az-train = "az.scripts.train:main"
+az-play = "az.scripts.play:main"
+az-benchmark = "az.scripts.benchmark:main"
+
+[tool.scikit-build]
+wheel.packages = ["python/az"]
+cmake.source-dir = "."
+cmake.build-type = "Release"
+[tool.scikit-build.cmake.define]
+CMAKE_CXX_STANDARD = "17"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["python"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"python/az/gui/piece_assets.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["PyQt6.*", "pyqtgraph.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "az.gui.board_view"
+disable_error_code = ["attr-defined"]
