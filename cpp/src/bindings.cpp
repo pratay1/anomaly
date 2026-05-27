@@ -70,7 +70,8 @@ PYBIND11_MODULE(_az_core, m) {
         return moves;
       })
       .def("result", &az::Board::result)
-      .def("in_check", &az::Board::in_check);
+      .def("in_check", &az::Board::in_check)
+      .def("is_legal", &az::Board::is_legal);
 
   m.def("encode", &az::encode, py::call_guard<py::gil_scoped_release>());
   m.def("move_to_index", &az::move_to_index);

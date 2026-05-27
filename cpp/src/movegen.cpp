@@ -3,6 +3,10 @@
 
 namespace az {
 
+static Bitboard enemy_king_squares(const Board& board, Color enemy) {
+  return board.pieces(enemy, PieceType::King);
+}
+
 static void add_move(std::vector<Move>& out, int from, int to, Piece piece, Piece captured,
                      PieceType promo, MoveFlag flag) {
   Move m;
@@ -21,6 +25,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
   Color them = us == Color::White ? Color::Black : Color::White;
   Bitboard occ = board.occupancy();
   Bitboard them_occ = board.all_pieces(them);
+  Bitboard no_king_cap = ~enemy_king_squares(board, them);
 
   int push_dir = us == Color::White ? 8 : -8;
   int start_rank = us == Color::White ? 1 : 6;
@@ -54,7 +59,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
       if (f > 0) cap_mask |= bit(from - 9);
       if (f < 7) cap_mask |= bit(from - 7);
     }
-    cap_mask &= them_occ;
+    cap_mask &= them_occ & no_king_cap;
     while (cap_mask) {
       int cap_sq = pop_lsb(cap_mask);
       if (rank_of(cap_sq) == promo_rank) {
@@ -89,7 +94,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
     while (pieces) {
       int from = pop_lsb(pieces);
       uint64_t att = attack_fn(from);
-      att &= ~board.all_pieces(us);
+      att &= ~board.all_pieces(us) & no_king_cap;
       while (att) {
         int to = pop_lsb(att);
         Piece cap = board.at(to);
@@ -107,7 +112,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
     while (pieces) {
       int from = pop_lsb(pieces);
       uint64_t att = attack_fn(from, occ);
-      att &= ~board.all_pieces(us);
+      att &= ~board.all_pieces(us) & no_king_cap;
       while (att) {
         int to = pop_lsb(att);
         Piece cap = board.at(to);
@@ -123,7 +128,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
     return bishop_attacks(s, o) | rook_attacks(s, o);
   });
 
-  // Castling
+  // Castling — king may not pass through or land on attacked squares
   uint8_t cr = board.castling_rights();
   if (!board.in_check(us)) {
     int rank = us == Color::White ? 0 : 7;
@@ -133,19 +138,21 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
         int f1 = sq(5, rank), g1 = sq(6, rank), h1 = sq(7, rank);
         if (board.at(f1) == Piece::None && board.at(g1) == Piece::None &&
             board.at(h1) == make_piece(us, PieceType::Rook) &&
-            !board.in_check(us)) {
-          Board tmp = board;
-          // check squares not attacked - simplified: skip if f1/g1 attacked
+            !board.square_attacked(king_sq, them) && !board.square_attacked(f1, them) &&
+            !board.square_attacked(g1, them)) {
           add_move(out, king_sq, g1, board.at(king_sq), Piece::None, PieceType::None,
                    MoveFlag::Castle);
         }
       }
       if ((us == Color::White && (cr & 2)) || (us == Color::Black && (cr & 8))) {
-        int d1 = sq(3, rank), c1 = sq(2, rank), a1 = sq(0, rank);
+        int d1 = sq(3, rank), c1 = sq(2, rank), b1 = sq(1, rank), a1 = sq(0, rank);
         if (board.at(d1) == Piece::None && board.at(c1) == Piece::None &&
-            board.at(a1) == make_piece(us, PieceType::Rook))
+            board.at(b1) == Piece::None && board.at(a1) == make_piece(us, PieceType::Rook) &&
+            !board.square_attacked(king_sq, them) && !board.square_attacked(d1, them) &&
+            !board.square_attacked(c1, them)) {
           add_move(out, king_sq, c1, board.at(king_sq), Piece::None, PieceType::None,
                    MoveFlag::Castle);
+        }
       }
     }
   }
