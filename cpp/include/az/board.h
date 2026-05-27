@@ -48,6 +48,7 @@ class Board {
   void unmake_move(const Move& m);
 
   bool in_check(Color c) const;
+  bool square_attacked(int square, Color by) const;
   bool is_checkmate() const;
   bool is_stalemate() const;
   bool is_draw() const;
