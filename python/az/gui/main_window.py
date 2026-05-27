@@ -181,20 +181,24 @@ class MainWindow(QMainWindow):
         self.mcts_panel.set_searching()
 
     def _on_training_error(self, message: str) -> None:
-        self.status.showMessage(f"Training error: {message}")
-        if self.cfg.training_opponent == "stockfish":
-            orch = self.trainer_thread.orchestrator if self.trainer_thread else None
-            if orch is not None:
-                orch.set_training_opponent("self")
-            else:
-                self.cfg.training_opponent = "self"
-            self.btn_stockfish.blockSignals(True)
-            self.btn_stockfish.setChecked(False)
-            self.btn_stockfish.blockSignals(False)
-            self.subtitle.setText("AlphaZero · self-play")
-            self._reset_training_game_states()
+        try:
+            self._on_training_error_impl(message)
+        except Exception as exc:
+            self.status.showMessage(f"UI error (training continues): {exc}")
+
+    def _on_training_error_impl(self, message: str) -> None:
+        self.status.showMessage(f"Training error (continuing): {message}")
+        orch = self.trainer_thread.orchestrator if self.trainer_thread else None
+        if orch is not None and self.cfg.training_opponent == "stockfish":
+            orch.restart_stockfish()
 
     def _on_iteration_complete(self, event) -> None:
+        try:
+            self._on_iteration_complete_impl(event)
+        except Exception as exc:
+            self.status.showMessage(f"UI error (training continues): {exc}")
+
+    def _on_iteration_complete_impl(self, event) -> None:
         self.status.showMessage(
             f"Iteration {event.iteration} complete · brain updated: {event.brain_path}"
         )
@@ -209,12 +213,24 @@ class MainWindow(QMainWindow):
         self.mcts_panel.set_searching()
 
     def _on_train(self, step: TrainStep) -> None:
+        try:
+            self._on_train_impl(step)
+        except Exception as exc:
+            self.status.showMessage(f"UI error (training continues): {exc}")
+
+    def _on_train_impl(self, step: TrainStep) -> None:
         self.metrics.on_train_step(step)
         self.status.showMessage(
             f"Step {step.step} | loss {step.total_loss:.4f} | lr {step.lr:.5f}"
         )
 
     def _on_game(self, game: GameFinished) -> None:
+        try:
+            self._on_game_impl(game)
+        except Exception as exc:
+            self.status.showMessage(f"UI error (training continues): {exc}")
+
+    def _on_game_impl(self, game: GameFinished) -> None:
         gid = game.game_id
         if gid in self._game_states:
             st = self._game_states[gid]
@@ -249,6 +265,12 @@ class MainWindow(QMainWindow):
                 return fallback_fen
 
     def _on_move(self, mv: MovePlayed) -> None:
+        try:
+            self._on_move_impl(mv)
+        except Exception as exc:
+            self.status.showMessage(f"UI error (training continues): {exc}")
+
+    def _on_move_impl(self, mv: MovePlayed) -> None:
         gid = mv.game_id
         if gid in self._game_states:
             st = self._game_states[gid]
@@ -381,5 +403,5 @@ class MainWindow(QMainWindow):
             self.trainer_thread.orchestrator.stop()
         if self.trainer_thread:
             self.trainer_thread.requestInterruption()
-            self.trainer_thread.wait(2000)
+            self.trainer_thread.wait(5000)
         super().closeEvent(event)

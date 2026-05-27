@@ -241,6 +241,10 @@ class ParallelSelfPlayPool:
             self._stockfish.close()
             self._stockfish = None
 
+    def restart_stockfish(self) -> None:
+        """Recycle the UCI engine after a crash without stopping training."""
+        self._close_stockfish()
+
     def set_training_opponent(self, opponent: str) -> None:
         """Switch between self-play and Stockfish; releases the engine when leaving Stockfish."""
         if opponent not in ("self", "stockfish"):
@@ -304,10 +308,19 @@ class ParallelSelfPlayPool:
             )
 
         if stockfish_mode:
-            examples = play_game(0)
-            self.buffer.add_batch(examples)
-            all_examples.extend(examples)
-            self._drain_events(event_queue)
+            for attempt in range(3):
+                try:
+                    examples = play_game(0)
+                    self.buffer.add_batch(examples)
+                    all_examples.extend(examples)
+                    self._drain_events(event_queue)
+                    return all_examples
+                except Exception:
+                    self.restart_stockfish()
+                    stockfish_engine = self._stockfish_engine()
+                    if attempt == 2:
+                        self._drain_events(event_queue)
+                        return all_examples
             return all_examples
 
         lock = threading.Lock()
@@ -329,6 +342,9 @@ class ParallelSelfPlayPool:
                 for fut in done:
                     if self.stop_event.is_set():
                         break
-                    all_examples.extend(fut.result())
+                    try:
+                        all_examples.extend(fut.result())
+                    except Exception:
+                        continue
         self._drain_events(event_queue)
         return all_examples

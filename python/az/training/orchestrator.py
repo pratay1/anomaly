@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import replace
@@ -18,16 +19,37 @@ from az.training.central_learner import CentralLearner
 from az.training.inference_server import InferenceServer
 from az.training.replay_buffer import ReplayBuffer
 from az.training.selfplay_worker import ParallelSelfPlayPool
-from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_error
+from az.training.stockfish_paths import stockfish_path_error
+
+logger = logging.getLogger(__name__)
 
 try:
-    from PyQt6.QtCore import QObject, QThread, pyqtSignal
+    from PyQt6.QtCore import (
+        Q_ARG,
+        QCoreApplication,
+        QMetaObject,
+        QObject,
+        QThread,
+        Qt,
+        pyqtSignal,
+        pyqtSlot,
+    )
 except ImportError:
     QObject = object  # type: ignore
     QThread = threading.Thread  # type: ignore
+    QCoreApplication = None  # type: ignore
+    QMetaObject = None  # type: ignore
+    Qt = None  # type: ignore
+    Q_ARG = None  # type: ignore
 
     def pyqtSignal(*args, **kwargs):  # type: ignore
         return None
+
+    def pyqtSlot(*args, **kwargs):  # type: ignore
+        def deco(fn):
+            return fn
+
+        return deco
 
 
 class TrainerOrchestrator(QObject):
@@ -63,7 +85,7 @@ class TrainerOrchestrator(QObject):
         self._iteration = 0
         self._visit_buffer: dict[str, list] = {}
         load_brain(self.model, device="cpu")
-        # SGD triggers torch._dynamo; must run on MainThread, not the trainer QThread.
+        # SGD must run on the Qt GUI thread (see _run_learner_steps).
         self.learner = CentralLearner(self.model, self.buffer, self.cfg, self.stop_event)
 
     def start(self) -> None:
@@ -76,50 +98,13 @@ class TrainerOrchestrator(QObject):
         def training_loop():
             while not self.stop_event.is_set():
                 if self.selfplay is None or self.learner is None or self.inference is None:
-                    break
-                n_games = self.cfg.games_per_selfplay_iteration()
-                self.cfg.games_per_iteration = n_games
-                try:
-                    self.selfplay.run_iteration(n_games)
-                except Exception as exc:
-                    self.training_error.emit(str(exc))
-                    time.sleep(1.0)
+                    time.sleep(0.2)
                     continue
-                if self.stop_event.is_set():
-                    break
-                self.learner.train_iteration(self.cfg.train_steps_per_iteration)
-                step = self.learner.global_step
-                self._iteration += 1
-                brain_path = save_brain(
-                    self.model,
-                    self.cfg,
-                    step,
-                    iteration=self._iteration,
-                    run_dir=self.cfg.run_dir,
-                )
-                self.ckpt.save(
-                    self.model,
-                    self.cfg,
-                    step,
-                    iteration=self._iteration,
-                )
-                self.inference.reload_weights(self.model.state_dict())
-                self.iteration_complete.emit(
-                    IterationComplete(
-                        iteration=self._iteration,
-                        games_finished=self.cfg.games_per_iteration,
-                        train_steps=self.cfg.train_steps_per_iteration,
-                        brain_path=str(brain_path),
-                    )
-                )
-                if step > 0 and step % self.cfg.arena_every_steps == 0:
-                    wins, draws, losses = play_random_vs_random(self.cfg.arena_num_games)
-                    total = max(wins + draws + losses, 1)
-                    wr = wins / total
-                    self.arena_result.emit(
-                        ArenaResult(win_rate=wr, draws=draws, wins=wins, losses=losses)
-                    )
-                time.sleep(0.01)
+                try:
+                    self._run_training_iteration()
+                except Exception as exc:
+                    self._handle_training_failure(exc)
+                    time.sleep(1.0)
 
         t_train = threading.Thread(target=training_loop, daemon=True, name="TrainingLoop")
         t_train.start()
@@ -130,16 +115,104 @@ class TrainerOrchestrator(QObject):
                 time.sleep(30)
                 if self.learner is None:
                     continue
-                step = self.learner.global_step
-                path = self.ckpt.save(
-                    self.model,
-                    self.cfg,
-                    step,
-                    iteration=self._iteration,
-                )
-                self.checkpoint_saved.emit(CheckpointSaved(str(path), step))
+                try:
+                    step = self.learner.global_step
+                    path = self.ckpt.save(
+                        self.model,
+                        self.cfg,
+                        step,
+                        iteration=self._iteration,
+                    )
+                    self.checkpoint_saved.emit(CheckpointSaved(str(path), step))
+                except Exception as exc:
+                    self._handle_training_failure(exc)
 
         threading.Thread(target=monitor, daemon=True, name="Monitor").start()
+
+    def _run_training_iteration(self) -> None:
+        assert self.selfplay is not None and self.learner is not None and self.inference is not None
+        n_games = self.cfg.games_per_selfplay_iteration()
+        self.cfg.games_per_iteration = n_games
+        self.selfplay.run_iteration(n_games)
+        if self.stop_event.is_set():
+            return
+        self._run_learner_steps(self.cfg.train_steps_per_iteration)
+        step = self.learner.global_step
+        self._iteration += 1
+        try:
+            brain_path = save_brain(
+                self.model,
+                self.cfg,
+                step,
+                iteration=self._iteration,
+                run_dir=self.cfg.run_dir,
+            )
+            self.ckpt.save(
+                self.model,
+                self.cfg,
+                step,
+                iteration=self._iteration,
+            )
+            self.inference.reload_weights(self.model.state_dict())
+        except Exception as exc:
+            self._handle_training_failure(exc)
+            return
+        self.iteration_complete.emit(
+            IterationComplete(
+                iteration=self._iteration,
+                games_finished=self.cfg.games_per_iteration,
+                train_steps=self.cfg.train_steps_per_iteration,
+                brain_path=str(brain_path),
+            )
+        )
+        if step > 0 and step % self.cfg.arena_every_steps == 0:
+            try:
+                wins, draws, losses = play_random_vs_random(self.cfg.arena_num_games)
+            except Exception as exc:
+                self._handle_training_failure(exc)
+                return
+            total = max(wins + draws + losses, 1)
+            wr = wins / total
+            self.arena_result.emit(
+                ArenaResult(win_rate=wr, draws=draws, wins=wins, losses=losses)
+            )
+        time.sleep(0.01)
+
+    @pyqtSlot(int)
+    def _train_iteration_on_gui_thread(self, steps: int) -> None:
+        if self.learner is not None:
+            self.learner.train_iteration(steps)
+
+    def _run_learner_steps(self, steps: int) -> None:
+        """Run SGD on the Qt main thread when a GUI event loop is active."""
+        if self.learner is None:
+            return
+        app = QCoreApplication.instance() if QCoreApplication is not None else None
+        on_gui = (
+            app is not None
+            and QThread is not threading.Thread
+            and QThread.currentThread() == app.thread()
+        )
+        if on_gui or app is None or QMetaObject is None:
+            self.learner.train_iteration(steps)
+            return
+        QMetaObject.invokeMethod(
+            self,
+            "_train_iteration_on_gui_thread",
+            Qt.ConnectionType.BlockingQueuedConnection,
+            Q_ARG(int, steps),
+        )
+
+    def _handle_training_failure(self, exc: Exception) -> None:
+        msg = f"{type(exc).__name__}: {exc}"
+        logger.warning("training failure (continuing): %s", msg, exc_info=exc)
+        self.training_error.emit(msg)
+        if self.cfg.training_opponent == "stockfish":
+            self.restart_stockfish()
+
+    def restart_stockfish(self) -> None:
+        if self.selfplay is not None:
+            self.selfplay.restart_stockfish()
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -149,7 +222,6 @@ class TrainerOrchestrator(QObject):
     def set_training_opponent(self, opponent: str) -> str | None:
         """Switch training mode at runtime. Returns an error message on failure."""
         if opponent == "stockfish":
-            self.cfg.stockfish_path = resolve_stockfish_path()
             err = stockfish_path_error(self.cfg.stockfish_path)
             if err:
                 return err

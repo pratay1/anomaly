@@ -45,31 +45,35 @@ class InferenceServer(threading.Thread):
         expected_state = core.ENCODING_CHANNELS * 64
 
         while not self.stop_event.is_set():
-            reqs = self.queue.drain(self.cfg.max_batch, self.cfg.max_wait_us)
-            if not reqs:
-                time.sleep(0.001)
+            try:
+                reqs = self.queue.drain(self.cfg.max_batch, self.cfg.max_wait_us)
+                if not reqs:
+                    time.sleep(0.001)
+                    continue
+
+                state_sizes = [len(r.state) for r in reqs]
+                if any(s != expected_state for s in state_sizes):
+                    continue
+
+                states = np.stack([np.asarray(r.state, dtype=np.float32) for r in reqs])
+                b = states.shape[0]
+                x = torch.from_numpy(states).view(b, core.ENCODING_CHANNELS, 8, 8).to(self.device)
+
+                with self._model_lock:
+                    version = self._model_version
+                    with torch.no_grad():
+                        logits, values = self.model(x)
+
+                if version != self._model_version:
+                    continue
+
+                policies = []
+                for i in range(b):
+                    p = torch.softmax(logits[i], dim=-1).cpu().numpy()
+                    policies.append(p.tolist())
+
+                ids = [r.id for r in reqs]
+                self.queue.fulfill(ids, policies, values.cpu().tolist())
+            except Exception:
+                time.sleep(0.05)
                 continue
-
-            state_sizes = [len(r.state) for r in reqs]
-            if any(s != expected_state for s in state_sizes):
-                continue
-
-            states = np.stack([np.asarray(r.state, dtype=np.float32) for r in reqs])
-            b = states.shape[0]
-            x = torch.from_numpy(states).view(b, core.ENCODING_CHANNELS, 8, 8).to(self.device)
-
-            with self._model_lock:
-                version = self._model_version
-                with torch.no_grad():
-                    logits, values = self.model(x)
-
-            if version != self._model_version:
-                continue
-
-            policies = []
-            for i in range(b):
-                p = torch.softmax(logits[i], dim=-1).cpu().numpy()
-                policies.append(p.tolist())
-
-            ids = [r.id for r in reqs]
-            self.queue.fulfill(ids, policies, values.cpu().tolist())

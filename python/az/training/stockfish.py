@@ -7,7 +7,7 @@ import chess.engine
 
 import az._az_core as core
 from az.config import Config
-from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_error
+from az.training.stockfish_paths import stockfish_path_error
 
 
 def _sq_uci(sq: int) -> str:
@@ -42,9 +42,6 @@ class StockfishEngine:
                 pass
             self._engine = None
         path = Path(self.cfg.stockfish_path)
-        if not path.is_file():
-            path = resolve_stockfish_path()
-            self.cfg.stockfish_path = path
         err = stockfish_path_error(path)
         if err:
             raise FileNotFoundError(err)
@@ -55,7 +52,7 @@ class StockfishEngine:
         fen = board.fen()
         limit = chess.engine.Limit(time=self.cfg.stockfish_movetime_ms / 1000.0)
         last_err: Exception | None = None
-        for _ in range(2):
+        for _ in range(4):
             try:
                 engine = self._engine if self._engine is not None else self._restart()
                 result = engine.play(chess.Board(fen), limit)
