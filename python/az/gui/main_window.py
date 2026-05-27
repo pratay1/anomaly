@@ -51,7 +51,12 @@ class MainWindow(QMainWindow):
         title_row.setSpacing(2)
         self.title = QLabel("Anomaly")
         self.title.setObjectName("title")
-        subtitle = QLabel("AlphaZero · self-play")
+        mode_label = (
+            "Stockfish training"
+            if self.cfg.training_opponent == "stockfish"
+            else "self-play"
+        )
+        subtitle = QLabel(f"AlphaZero · {mode_label}")
         subtitle.setObjectName("subtitle")
         self.subtitle = subtitle
         title_row.addWidget(self.title)
@@ -139,6 +144,7 @@ class MainWindow(QMainWindow):
         )
         o.arena_result.connect(lambda ar: self.metrics.on_arena(ar.win_rate))
         o.iteration_complete.connect(self._on_iteration_complete)
+        o.training_error.connect(self._on_training_error)
         self.trainer_thread.training_started.connect(self._wire_trainer_signals)
         self.trainer_thread.start()
 
@@ -157,11 +163,38 @@ class MainWindow(QMainWindow):
         if o:
             o.flush_selfplay_events()
 
+    def _active_game_count(self) -> int:
+        return 1 if self.cfg.training_opponent == "stockfish" else self.cfg.num_workers
+
+    def _reset_training_game_states(self) -> None:
+        n = self._active_game_count()
+        self._game_states = {i: GameState() for i in range(n)}
+        self._focused_game_id = 0
+        self._ply_token += 1
+        self._latest_post_fen = chess.STARTING_FEN
+        self.board_view.clear_last_move()
+        self.board_view.set_fen(chess.STARTING_FEN, animated=False)
+        self.mcts_panel.set_searching()
+
+    def _on_training_error(self, message: str) -> None:
+        self.status.showMessage(f"Training error: {message}")
+        if self.cfg.training_opponent == "stockfish":
+            orch = self.trainer_thread.orchestrator if self.trainer_thread else None
+            if orch is not None:
+                orch.set_training_opponent("self")
+            else:
+                self.cfg.training_opponent = "self"
+            self.btn_stockfish.blockSignals(True)
+            self.btn_stockfish.setChecked(False)
+            self.btn_stockfish.blockSignals(False)
+            self.subtitle.setText("AlphaZero · self-play")
+            self._reset_training_game_states()
+
     def _on_iteration_complete(self, event) -> None:
         self.status.showMessage(
             f"Iteration {event.iteration} complete · brain updated: {event.brain_path}"
         )
-        for gid in range(self.cfg.num_workers):
+        for gid in range(self._active_game_count()):
             self._game_states[gid] = GameState()
         if self._grid_dialog is not None:
             self._grid_dialog.reset_iteration(event.iteration)
@@ -308,9 +341,22 @@ class MainWindow(QMainWindow):
         dlg.show()
 
     def _on_stockfish_toggled(self, enabled: bool) -> None:
-        self.cfg.training_opponent = "stockfish" if enabled else "self"
+        opponent = "stockfish" if enabled else "self"
+        orch = self.trainer_thread.orchestrator if self.trainer_thread else None
+        if orch is not None:
+            err = orch.set_training_opponent(opponent)
+            if err:
+                self.btn_stockfish.blockSignals(True)
+                self.btn_stockfish.setChecked(not enabled)
+                self.btn_stockfish.blockSignals(False)
+                self.status.showMessage(err)
+                return
+        else:
+            self.cfg.training_opponent = opponent
+
         mode = "Stockfish training" if enabled else "self-play"
         self.subtitle.setText(f"AlphaZero · {mode}")
+        self._reset_training_game_states()
         detail = (
             "one serial game per iteration (no parallel self-play)"
             if enabled

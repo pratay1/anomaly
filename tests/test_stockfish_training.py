@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import queue
 import threading
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import az._az_core as core
 from az.config import Config
-from az.training.selfplay_worker import ParallelSelfPlayPool, play_one_game
 from az.training.replay_buffer import ReplayBuffer
+from az.training.selfplay_worker import ParallelSelfPlayPool, play_one_game
+from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_error
 
 
 def test_play_one_game_stockfish_only_records_mcts_plies():
@@ -114,11 +116,41 @@ def test_stockfish_mode_runs_one_serial_game():
         call_count += 1
         return []
 
-    with patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play):
+    with (
+        patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play),
+        patch.object(pool, "_stockfish_engine", return_value=MagicMock()),
+    ):
         pool.run_iteration(3)
 
     assert call_count == 1
     assert cfg.games_per_selfplay_iteration() == 1
+
+
+def test_set_training_opponent_closes_stockfish_engine():
+    cfg = Config()
+    cfg.training_opponent = "stockfish"
+    stop = threading.Event()
+    queue_inf = core.InferenceQueue()
+    buf = ReplayBuffer(1000, cfg.encoding_channels * 64, cfg.policy_size)
+    pool = ParallelSelfPlayPool(queue_inf, buf, cfg, stop)
+
+    engine = MagicMock()
+    with patch.object(pool, "_stockfish", engine):
+        pool.set_training_opponent("self")
+    engine.close.assert_called_once()
+    assert pool._stockfish is None
+    assert cfg.training_opponent == "self"
+
+
+def test_resolve_stockfish_path_env(monkeypatch, tmp_path):
+    fake = tmp_path / "my-stockfish"
+    fake.write_text("")
+    monkeypatch.setenv("ANOMALY_STOCKFISH_PATH", str(fake))
+    assert resolve_stockfish_path() == fake.resolve()
+
+
+def test_stockfish_path_error_when_missing():
+    assert stockfish_path_error(Path("/nonexistent/stockfish")) is not None
 
 
 def _drain(q: queue.Queue) -> list:
