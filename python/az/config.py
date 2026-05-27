@@ -26,7 +26,7 @@ class Config:
     max_game_length: int = 120
     training_opponent: str = "self"  # "self" or "stockfish"
     stockfish_path: Path = field(
-        default_factory=lambda: Path(r"C:\Users\prata\stockfish\stockfish.exe")
+        default_factory=lambda: Path("stockfish")
     )
     stockfish_movetime_ms: int = 50
 

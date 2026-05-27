@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from az.brain import load_brain, resolve_brain_path
+from az.brain import load_brain
 from az.config import Config
 from az.gui.app import main
 from az.network.resnet import AlphaZeroResNet

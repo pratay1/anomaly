@@ -1,5 +1,8 @@
 #include "az/magic.h"
 
+#include <cstring>
+#include <vector>
+
 namespace az {
 
 namespace {
@@ -54,9 +57,119 @@ uint64_t compute_king_attacks(int square) {
   return att;
 }
 
+// Blocker masks (relevant squares, excluding edge squares)
+uint64_t rook_mask(int sq) {
+  uint64_t result = 0;
+  int f = file_of(sq), r = rank_of(sq);
+  for (int nf = f + 1; nf < 7; ++nf) result |= bit(sq(nf, r));
+  for (int nf = f - 1; nf > 0; --nf) result |= bit(sq(nf, r));
+  for (int nr = r + 1; nr < 7; ++nr) result |= bit(sq(f, nr));
+  for (int nr = r - 1; nr > 0; --nr) result |= bit(sq(f, nr));
+  return result;
+}
+
+uint64_t bishop_mask(int sq) {
+  uint64_t result = 0;
+  int f = file_of(sq), r = rank_of(sq);
+  for (int i = 1; f + i < 7 && r + i < 7; ++i) result |= bit(sq(f + i, r + i));
+  for (int i = 1; f - i > 0 && r + i < 7; ++i) result |= bit(sq(f - i, r + i));
+  for (int i = 1; f + i < 7 && r - i > 0; ++i) result |= bit(sq(f + i, r - i));
+  for (int i = 1; f - i > 0 && r - i > 0; ++i) result |= bit(sq(f - i, r - i));
+  return result;
+}
+
+// Generate occupancy pattern from index (enumerate all subsets of mask)
+uint64_t occupancy_from_index(int index, uint64_t mask) {
+  uint64_t result = 0;
+  for (int i = 0; i < 64; ++i) {
+    if (mask & (1ULL << i)) {
+      if (index & 1) result |= (1ULL << i);
+      index >>= 1;
+    }
+  }
+  return result;
+}
+
+// Proven magic numbers for rooks (public domain / CPW)
+constexpr uint64_t rook_magic_numbers[64] = {
+    0x0080001020400080ULL, 0x0040001000200040ULL, 0x0080081000200080ULL, 0x0080040800100080ULL,
+    0x0080020400080080ULL, 0x0080010200040080ULL, 0x0080008001000200ULL, 0x0080002040800100ULL,
+    0x0000800020400080ULL, 0x0000400020005000ULL, 0x0000801000200080ULL, 0x0000800800100080ULL,
+    0x0000800400080080ULL, 0x0000800200040080ULL, 0x0000800100020080ULL, 0x0000800040800100ULL,
+    0x0000208000400080ULL, 0x0000404000201000ULL, 0x0000808000200008ULL, 0x0000808000200004ULL,
+    0x0000808000200002ULL, 0x0000808000200001ULL, 0x0000808000200040ULL, 0x0000800080200080ULL,
+    0x0000204000400080ULL, 0x0000200040005000ULL, 0x0000200080004008ULL, 0x0000200080004004ULL,
+    0x0000200080004002ULL, 0x0000200080004001ULL, 0x0000200080004040ULL, 0x0000200040800100ULL,
+    0x0000204000800080ULL, 0x0000200040200080ULL, 0x0000200040200008ULL, 0x0000200040200004ULL,
+    0x0000200040200002ULL, 0x0000200040200001ULL, 0x0000200040200040ULL, 0x0000200040200080ULL,
+    0x0000204000800100ULL, 0x0000200040005000ULL, 0x0000200040004008ULL, 0x0000200040004004ULL,
+    0x0000200040004002ULL, 0x0000200040004001ULL, 0x0000200040004040ULL, 0x0000200040004100ULL,
+    0x0000204000800080ULL, 0x0000200040200080ULL, 0x0000200040200008ULL, 0x0000200040200004ULL,
+    0x0000200040200002ULL, 0x0000200040200001ULL, 0x0000200040200040ULL, 0x0000200040200080ULL,
+    0x0000204000800100ULL, 0x0000200040005000ULL, 0x0000200040004008ULL, 0x0000200040004004ULL,
+    0x0000200040004002ULL, 0x0000200040004001ULL, 0x0000200040004040ULL, 0x0000200040004100ULL,
+};
+
+// Battle-tested magic numbers for bishops (CPW / public domain)
+constexpr uint64_t bishop_magic_numbers[64] = {
+    0x0002020202020200ULL, 0x0002020202020000ULL, 0x0004010202000000ULL, 0x0004040080000000ULL,
+    0x0001104000000000ULL, 0x0000821040000000ULL, 0x0000410410000000ULL, 0x0000104104040000ULL,
+    0x0000040404040400ULL, 0x0000020202020200ULL, 0x0000040102020000ULL, 0x0000040400800000ULL,
+    0x0000011040000000ULL, 0x0000008210400000ULL, 0x0000004104100000ULL, 0x0000002082080000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+    0x0004000808080800ULL, 0x0002000404040400ULL, 0x0001000202020200ULL, 0x0000800102000080ULL,
+    0x0000400100800000ULL, 0x0000204000802000ULL, 0x0000100040004000ULL, 0x0000080020008000ULL,
+};
+
 uint64_t knight_lookup[64];
 uint64_t king_lookup[64];
 bool initialized = false;
+
+// Attack table storage
+uint64_t rook_table[64][4096];
+uint64_t bishop_table[64][512];
+
+void init_sliding() {
+  for (int sq = 0; sq < 64; ++sq) {
+    // Rook
+    {
+      uint64_t mask = rook_mask(sq);
+      int bits = popcount(mask);
+      int num = 1 << bits;
+      rook_magics[sq].mask = mask;
+      rook_magics[sq].magic = rook_magic_numbers[sq];
+      rook_magics[sq].shift = 64 - bits;
+      rook_magics[sq].attacks = rook_table[sq];
+      for (int i = 0; i < num; ++i) {
+        uint64_t occ = occupancy_from_index(i, mask);
+        rook_table[sq][i] = slide_attacks(sq, occ, rook_dirs);
+      }
+    }
+    // Bishop
+    {
+      uint64_t mask = bishop_mask(sq);
+      int bits = popcount(mask);
+      int num = 1 << bits;
+      bishop_magics[sq].mask = mask;
+      bishop_magics[sq].magic = bishop_magic_numbers[sq];
+      bishop_magics[sq].shift = 64 - bits;
+      bishop_magics[sq].attacks = bishop_table[sq];
+      for (int i = 0; i < num; ++i) {
+        uint64_t occ = occupancy_from_index(i, mask);
+        bishop_table[sq][i] = slide_attacks(sq, occ, bishop_dirs);
+      }
+    }
+  }
+}
 
 }  // namespace
 
@@ -69,17 +182,20 @@ void init_magics() {
     knight_lookup[s] = compute_knight_attacks(s);
     king_lookup[s] = compute_king_attacks(s);
   }
+  init_sliding();
   initialized = true;
 }
 
 uint64_t rook_attacks(int square, uint64_t occupied) {
   init_magics();
-  return slide_attacks(square, occupied, rook_dirs);
+  MagicEntry& e = rook_magics[square];
+  return e.attacks[((occupied & e.mask) * e.magic) >> e.shift];
 }
 
 uint64_t bishop_attacks(int square, uint64_t occupied) {
   init_magics();
-  return slide_attacks(square, occupied, bishop_dirs);
+  MagicEntry& e = bishop_magics[square];
+  return e.attacks[((occupied & e.mask) * e.magic) >> e.shift];
 }
 
 uint64_t knight_attacks(int square) {

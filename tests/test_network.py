@@ -21,3 +21,20 @@ def test_loss():
     p, v = model(x)
     pl, vl, total = az_loss(p, v, tp, tv)
     assert total.ndim == 0
+
+
+def test_gradient_flow():
+    cfg = Config()
+    model = AlphaZeroResNet(cfg)
+    x = torch.randn(2, cfg.encoding_channels, 8, 8)
+    tp = torch.softmax(torch.randn(2, cfg.policy_size), dim=-1)
+    tv = torch.tensor([1.0, -1.0])
+    p, v = model(x)
+    pl, vl, total = az_loss(p, v, tp, tv)
+    total.backward()
+    has_grad = False
+    for p in model.parameters():
+        if p.grad is not None and p.grad.abs().sum().item() > 0:
+            has_grad = True
+            break
+    assert has_grad, "No gradients flowed through the network"

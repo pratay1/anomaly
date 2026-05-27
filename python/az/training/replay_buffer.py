@@ -10,7 +10,7 @@ class ReplayBuffer:
         self.capacity = capacity
         self.state_size = state_size
         self.policy_size = policy_size
-        self.states = np.zeros((capacity, state_size), dtype=np.float32)
+        self.states = np.zeros((capacity, state_size), dtype=np.float16)
         self.policies = np.zeros((capacity, policy_size), dtype=np.float32)
         self.values = np.zeros((capacity,), dtype=np.float32)
         self.size = 0
@@ -20,7 +20,7 @@ class ReplayBuffer:
     def add_batch(self, examples: list) -> None:
         with self._lock:
             for ex in examples:
-                s = np.asarray(ex.state, dtype=np.float32)
+                s = np.asarray(ex.state, dtype=np.float16)
                 p = np.asarray(ex.policy, dtype=np.float32)
                 v = float(ex.value)
                 self.states[self.ptr] = s
@@ -34,7 +34,11 @@ class ReplayBuffer:
             if self.size == 0:
                 raise RuntimeError("Replay buffer empty")
             idx = np.random.randint(0, self.size, size=batch_size)
-            return self.states[idx].copy(), self.policies[idx].copy(), self.values[idx].copy()
+            return (
+                self.states[idx].astype(np.float32),
+                self.policies[idx].copy(),
+                self.values[idx].copy(),
+            )
 
     def __len__(self) -> int:
         with self._lock:

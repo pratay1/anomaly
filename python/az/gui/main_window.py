@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.cfg.emit_selfplay_visits = True
         self.setWindowTitle("Anomaly")
         self.resize(1320, 820)
+        self.setMinimumSize(920, 620)
         self.setStyleSheet(DARK_STYLESHEET)
 
         central = QWidget()
@@ -84,6 +85,9 @@ class MainWindow(QMainWindow):
         self.btn_stockfish = QPushButton("Train Against Stockfish")
         self.btn_stockfish.setCheckable(True)
         self.btn_stockfish.setChecked(self.cfg.training_opponent == "stockfish")
+        self.btn_stockfish.setToolTip(
+            "Takes effect at the next iteration start (not instant)"
+        )
         self.btn_stockfish.toggled.connect(self._on_stockfish_toggled)
         left.addWidget(self.btn_stockfish)
 
@@ -242,7 +246,8 @@ class MainWindow(QMainWindow):
             self.board_view.set_fen(mv.fen, animated=False)
             self.mcts_panel.update_visits(mv.fen, mv.visits)
             delay = max(0, self.cfg.mcts_reveal_ms)
-            QTimer.singleShot(delay, lambda t=token, fs=from_sq, ts=to_sq: self._commit_ply(t, fs, ts))
+            cb = lambda t=token, fs=from_sq, ts=to_sq: self._commit_ply(t, fs, ts)
+            QTimer.singleShot(delay, cb)
         else:
             self.board_view.set_fen(post_fen, animated=True)
             if from_sq is not None and to_sq is not None:

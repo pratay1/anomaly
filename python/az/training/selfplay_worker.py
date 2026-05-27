@@ -38,11 +38,6 @@ def move_to_uci(m: core.Move) -> str:
     return uci
 
 
-def _halfmove_from_fen(fen: str) -> int:
-    parts = fen.split()
-    return int(parts[4]) if len(parts) >= 5 else 0
-
-
 def play_one_game(
     queue_inf: core.InferenceQueue,
     cfg: Config,
@@ -206,7 +201,6 @@ class SelfPlayWorker(QObject):
         return examples
 
     def run_loop(self) -> None:
-        import time
 
         game_id = 0
         while not self.stop_event.is_set():

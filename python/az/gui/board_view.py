@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import chess
-from PyQt6.QtCore import QPointF, QPropertyAnimation, Qt, QVariantAnimation
+from PyQt6.QtCore import pyqtSignal, QPointF, QPropertyAnimation, Qt, QVariantAnimation
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 from PyQt6.QtWidgets import (
@@ -60,6 +60,8 @@ class _PulseRing(QGraphicsRectItem):
 
 class BoardView(QGraphicsView):
     """Main chess board — premium look, slide animations on normal moves."""
+
+    square_clicked = pyqtSignal(int)
 
     SQUARE = 64
     COORD_MARGIN = 18
@@ -330,6 +332,14 @@ class BoardView(QGraphicsView):
 
         if not self._animate_slide(new_board, from_sq, to_sq):
             self._rebuild_all(new_board)
+
+    def mouseReleaseEvent(self, event):
+        pos = self.mapToScene(event.position().toPoint())
+        f = int(pos.x() // self.SQUARE)
+        r = 7 - int(pos.y() // self.SQUARE)
+        if 0 <= f < 8 and 0 <= r < 8:
+            self.square_clicked.emit(chess.square(f, r))
+        super().mouseReleaseEvent(event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

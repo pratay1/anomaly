@@ -47,7 +47,13 @@ class CentralLearner(QObject):
             weight_decay=cfg.weight_decay,
         )
         self.global_step = 0
+        self._warmup_steps = 1000
         self._train_lock = threading.Lock()
+
+    def _warmup_lr(self, step: int, base_lr: float) -> float:
+        if step < self._warmup_steps:
+            return base_lr * (step + 1) / self._warmup_steps
+        return base_lr
 
     def _compute_grads(
         self,
@@ -60,6 +66,7 @@ class CentralLearner(QObject):
         logits, pred_v = model(states)
         pl, vl, total = az_loss(logits, pred_v, policies, values)
         total.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
         grads = []
         for p in model.parameters():
             if p.grad is not None:
@@ -86,7 +93,8 @@ class CentralLearner(QObject):
             p.grad = g
         self.optimizer.step()
         self.global_step += 1
-        lr = self.cfg.learning_rate(self.global_step)
+        raw_lr = self.cfg.learning_rate(self.global_step)
+        lr = self._warmup_lr(self.global_step, raw_lr)
         for g in self.optimizer.param_groups:
             g["lr"] = lr
 
@@ -130,7 +138,8 @@ class CentralLearner(QObject):
                 if len(self.buffer) < self.cfg.batch_size:
                     break
 
-                lr = self.cfg.learning_rate(self.global_step)
+                raw_lr = self.cfg.learning_rate(self.global_step)
+                lr = self._warmup_lr(self.global_step, raw_lr)
                 for g in self.optimizer.param_groups:
                     g["lr"] = lr
 

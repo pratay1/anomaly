@@ -37,9 +37,16 @@ def evaluate_vs_random(
     num_games: int = 10,
 ) -> float:
     """Fraction of games won by MCTS+net (playing white and black alternately)."""
+    import threading
+
+    from az.training.inference_server import InferenceServer
+
     mcts_cfg = cfg.to_mcts_config()
     mcts_cfg.add_root_noise = False
     mcts_cfg.num_simulations = max(50, cfg.num_simulations // 2)
+    stop = threading.Event()
+    inf = InferenceServer(queue, model, cfg, stop)
+    inf.start()
     wins = 0.0
     for g in range(num_games):
         board = core.Board()
@@ -52,13 +59,13 @@ def evaluate_vs_random(
             legal = core.legal_move_indices(board)
             if not legal:
                 break
-            # Greedy
             best = max(legal, key=lambda i: pi[i])
             board.make_move(core.index_to_move(board, best))
         res = board.result()
-        # Simplified: count non-draw as success if we had moves
-        if res == core.GameResult.Draw:
-            pass
-        else:
-            wins += 0.5
+        is_white = g % 2 == 0
+        if res == core.GameResult.WhiteWin:
+            wins += 1.0 if is_white else 0.0
+        elif res == core.GameResult.BlackWin:
+            wins += 1.0 if not is_white else 0.0
+    stop.set()
     return wins / max(num_games, 1)

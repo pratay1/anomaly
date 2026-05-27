@@ -133,7 +133,7 @@ void generate_pseudo_legal_moves(const Board& board, std::vector<Move>& out) {
         int f1 = sq(5, rank), g1 = sq(6, rank), h1 = sq(7, rank);
         if (board.at(f1) == Piece::None && board.at(g1) == Piece::None &&
             board.at(h1) == make_piece(us, PieceType::Rook) &&
-            !board.in_check(them)) {
+            !board.in_check(us)) {
           Board tmp = board;
           // check squares not attacked - simplified: skip if f1/g1 attacked
           add_move(out, king_sq, g1, board.at(king_sq), Piece::None, PieceType::None,

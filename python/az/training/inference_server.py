@@ -32,12 +32,14 @@ class InferenceServer(threading.Thread):
         self.model.to(self.device)
         self.model.eval()
         self._model_lock = threading.Lock()
+        self._model_version = 0
 
     def reload_weights(self, state_dict: dict | None = None) -> None:
         with self._model_lock:
             if state_dict is not None:
                 self.model.load_state_dict(state_dict)
             self.model.eval()
+            self._model_version += 1
 
     def run(self) -> None:
         expected_state = core.ENCODING_CHANNELS * 64
@@ -57,8 +59,12 @@ class InferenceServer(threading.Thread):
             x = torch.from_numpy(states).view(b, core.ENCODING_CHANNELS, 8, 8).to(self.device)
 
             with self._model_lock:
+                version = self._model_version
                 with torch.no_grad():
                     logits, values = self.model(x)
+
+            if version != self._model_version:
+                continue
 
             policies = []
             for i in range(b):

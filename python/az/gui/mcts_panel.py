@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from az.gui.board_view import BoardView
-from az.gui.theme import BG_ELEVATED, BORDER_SUBTLE, TEXT_DISABLED
+from az.gui.theme import BG_ELEVATED, BORDER_SUBTLE
 
 _CARDS_ROW_HEIGHT = 76
 _PANEL_HEIGHT = 118

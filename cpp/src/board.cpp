@@ -454,13 +454,28 @@ bool Board::is_repetition() const {
 
 bool Board::has_insufficient_material() const {
   int w = 0, b = 0;
+  bool wb_bishop = false, bb_bishop = false;
   for (int sq = 0; sq < 64; ++sq) {
     Piece p = at(sq);
     if (p == Piece::None) continue;
-    if (color_of(p) == Color::White) ++w;
-    else ++b;
+    if (color_of(p) == Color::White) {
+      ++w;
+      if (p == Piece::WB) wb_bishop = true;
+    } else {
+      ++b;
+      if (p == Piece::BB) bb_bishop = true;
+    }
   }
-  return w <= 1 && b <= 1;
+  if (w <= 1 && b <= 1) return true;
+  if (w == 2 && b == 0 && wb_bishop) return false;
+  if (w == 0 && b == 2 && bb_bishop) return false;
+  if (w == 2 && b == 1 && wb_bishop) {
+    return type_of(at(ctz(all_pieces(Color::Black)))) != PieceType::Bishop;
+  }
+  if (w == 1 && b == 2 && bb_bishop) {
+    return type_of(at(ctz(all_pieces(Color::White)))) != PieceType::Bishop;
+  }
+  return false;
 }
 
 bool Board::is_draw() const {
@@ -470,7 +485,7 @@ bool Board::is_draw() const {
 
 GameResult Board::result() const {
   if (is_checkmate()) return stm_ == Color::White ? GameResult::BlackWin : GameResult::WhiteWin;
-  if (is_draw() || is_stalemate()) return GameResult::Draw;
+  if (is_draw()) return GameResult::Draw;
   return GameResult::Ongoing;
 }
 

@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import QGridLayout, QGroupBox, QSizePolicy
 
 from az.gui.theme import (
     BG_DEEPEST,
-    BG_SECONDARY,
     BORDER_SUBTLE,
     METRIC_COLORS,
     TEXT_DISABLED,
