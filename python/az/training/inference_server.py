@@ -20,6 +20,7 @@ class InferenceServer(threading.Thread):
         model: AlphaZeroResNet,
         cfg: Config,
         stop_event: threading.Event,
+        model_lock: threading.Lock | None = None,
     ):
         super().__init__(daemon=True, name="InferenceServer")
         self.queue = queue
@@ -31,7 +32,7 @@ class InferenceServer(threading.Thread):
         )
         self.model.to(self.device)
         self.model.eval()
-        self._model_lock = threading.Lock()
+        self._model_lock = model_lock or threading.Lock()
         self._model_version = 0
 
     def reload_weights(self, state_dict: dict | None = None) -> None:
@@ -60,12 +61,8 @@ class InferenceServer(threading.Thread):
                 x = torch.from_numpy(states).view(b, core.ENCODING_CHANNELS, 8, 8).to(self.device)
 
                 with self._model_lock:
-                    version = self._model_version
                     with torch.no_grad():
                         logits, values = self.model(x)
-
-                if version != self._model_version:
-                    continue
 
                 policies = []
                 for i in range(b):

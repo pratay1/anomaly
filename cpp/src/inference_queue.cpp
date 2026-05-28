@@ -5,7 +5,7 @@
 namespace az {
 
 PolicyValue InferenceQueue::evaluate(const std::vector<float>& state) {
-  int my_id;
+  uint64_t my_id;
   {
     std::unique_lock<std::mutex> lock(mutex_);
     my_id = next_id_++;
@@ -18,7 +18,7 @@ PolicyValue InferenceQueue::evaluate(const std::vector<float>& state) {
   }
 
   std::unique_lock<std::mutex> lock(mutex_);
-  cv_producer_.wait(lock, [&] {
+  cv_producer_.wait_for(lock, std::chrono::seconds(5), [&] {
     for (const auto& r : queue_) {
       if (r.id == my_id && r.fulfilled) return true;
     }
@@ -81,6 +81,18 @@ void InferenceQueue::fulfill(const std::vector<int>& ids,
         r.fulfilled = true;
         break;
       }
+    }
+  }
+  cv_producer_.notify_all();
+}
+
+void InferenceQueue::shutdown() {
+  std::unique_lock<std::mutex> lock(mutex_);
+  for (auto& r : queue_) {
+    if (!r.fulfilled) {
+      r.policy_out.assign(POLICY_SIZE, 0.0f);
+      r.value_out = 0.0f;
+      r.fulfilled = true;
     }
   }
   cv_producer_.notify_all();

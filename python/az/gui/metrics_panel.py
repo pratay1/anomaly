@@ -18,7 +18,9 @@ from az.ipc.events import TrainStep
 PLOT_HEIGHT = 108
 
 
-def _style_plot(pw: pg.PlotWidget, title: str, color: str) -> tuple[pg.PlotDataItem, pg.PlotDataItem]:
+def _style_plot(
+    pw: pg.PlotWidget, title: str, color: str
+) -> tuple[pg.PlotDataItem, pg.PlotDataItem]:
     pw.setTitle(title, color=TEXT_SECONDARY, size="9pt")
     pw.setBackground(BG_DEEPEST)
     pw.showGrid(x=True, y=True, alpha=0.08)

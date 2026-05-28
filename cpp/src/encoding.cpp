@@ -29,6 +29,80 @@ void set_plane(std::vector<float>& out, int channel, int square, float v = 1.0f)
   out[channel * 64 + square] = v;
 }
 
+// Piece-Square Tables (white's perspective, sq = rank*8 + file, rank 0 = a1)
+// Values in centipawns / 100, range roughly [-0.5, 0.5]
+constexpr float PST_PAWN[64] = {
+  0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+  0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f,
+  0.10f, 0.10f, 0.20f, 0.30f, 0.30f, 0.20f, 0.10f, 0.10f,
+  0.05f, 0.05f, 0.10f, 0.25f, 0.25f, 0.10f, 0.05f, 0.05f,
+  0.00f, 0.00f, 0.00f, 0.20f, 0.20f, 0.00f, 0.00f, 0.00f,
+  0.05f,-0.05f,-0.10f, 0.00f, 0.00f,-0.10f,-0.05f, 0.05f,
+  0.05f, 0.10f, 0.10f,-0.20f,-0.20f, 0.10f, 0.10f, 0.05f,
+  0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+};
+
+constexpr float PST_KNIGHT[64] = {
+ -0.50f,-0.40f,-0.30f,-0.30f,-0.30f,-0.30f,-0.40f,-0.50f,
+ -0.40f,-0.20f, 0.00f, 0.05f, 0.05f, 0.00f,-0.20f,-0.40f,
+ -0.30f, 0.05f, 0.10f, 0.15f, 0.15f, 0.10f, 0.05f,-0.30f,
+ -0.30f, 0.00f, 0.15f, 0.20f, 0.20f, 0.15f, 0.00f,-0.30f,
+ -0.30f, 0.05f, 0.15f, 0.20f, 0.20f, 0.15f, 0.05f,-0.30f,
+ -0.30f, 0.00f, 0.10f, 0.15f, 0.15f, 0.10f, 0.00f,-0.30f,
+ -0.40f,-0.20f, 0.00f, 0.00f, 0.00f, 0.00f,-0.20f,-0.40f,
+ -0.50f,-0.40f,-0.30f,-0.30f,-0.30f,-0.30f,-0.40f,-0.50f,
+};
+
+constexpr float PST_BISHOP[64] {
+ -0.20f,-0.10f,-0.10f,-0.10f,-0.10f,-0.10f,-0.10f,-0.20f,
+ -0.10f, 0.05f, 0.00f, 0.00f, 0.00f, 0.00f, 0.05f,-0.10f,
+ -0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f,-0.10f,
+ -0.10f, 0.00f, 0.10f, 0.10f, 0.10f, 0.10f, 0.00f,-0.10f,
+ -0.10f, 0.05f, 0.05f, 0.10f, 0.10f, 0.05f, 0.05f,-0.10f,
+ -0.10f, 0.00f, 0.05f, 0.10f, 0.10f, 0.05f, 0.00f,-0.10f,
+ -0.10f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,-0.10f,
+ -0.20f,-0.10f,-0.10f,-0.10f,-0.10f,-0.10f,-0.10f,-0.20f,
+};
+
+constexpr float PST_ROOK[64] {
+  0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+  0.05f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.05f,
+ -0.05f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,-0.05f,
+ -0.05f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,-0.05f,
+ -0.05f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,-0.05f,
+ -0.05f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,-0.05f,
+  0.05f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.10f, 0.05f,
+  0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f,
+};
+
+constexpr float PST_QUEEN[64] {
+ -0.20f,-0.10f,-0.10f,-0.05f,-0.05f,-0.10f,-0.10f,-0.20f,
+ -0.10f, 0.00f, 0.05f, 0.00f, 0.00f, 0.00f, 0.00f,-0.10f,
+ -0.10f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.00f,-0.10f,
+ -0.05f, 0.00f, 0.05f, 0.05f, 0.05f, 0.05f, 0.00f,-0.05f,
+  0.00f, 0.00f, 0.05f, 0.05f, 0.05f, 0.05f, 0.00f,-0.05f,
+ -0.10f, 0.05f, 0.05f, 0.05f, 0.05f, 0.05f, 0.00f,-0.10f,
+ -0.10f, 0.00f, 0.05f, 0.00f, 0.00f, 0.00f, 0.00f,-0.10f,
+ -0.20f,-0.10f,-0.10f,-0.05f,-0.05f,-0.10f,-0.10f,-0.20f,
+};
+
+constexpr float PST_KING[64] {
+  0.20f, 0.30f, 0.10f, 0.00f, 0.00f, 0.10f, 0.30f, 0.20f,
+  0.20f, 0.20f, 0.00f, 0.00f, 0.00f, 0.00f, 0.20f, 0.20f,
+ -0.10f,-0.20f,-0.20f,-0.20f,-0.20f,-0.20f,-0.20f,-0.10f,
+ -0.20f,-0.30f,-0.30f,-0.40f,-0.40f,-0.30f,-0.30f,-0.20f,
+ -0.30f,-0.40f,-0.40f,-0.50f,-0.50f,-0.40f,-0.40f,-0.30f,
+ -0.30f,-0.40f,-0.40f,-0.50f,-0.50f,-0.40f,-0.40f,-0.30f,
+ -0.30f,-0.40f,-0.40f,-0.50f,-0.50f,-0.40f,-0.40f,-0.30f,
+ -0.30f,-0.40f,-0.40f,-0.50f,-0.50f,-0.40f,-0.40f,-0.30f,
+};
+
+inline int flip_rank(int sq) { return sq ^ 56; }
+
+constexpr const float* PST_TABLES[6] = {
+  PST_PAWN, PST_KNIGHT, PST_BISHOP, PST_ROOK, PST_QUEEN, PST_KING
+};
+
 }  // namespace
 
 std::vector<float> encode(const Board& board) {
@@ -89,6 +163,18 @@ std::vector<float> encode(const Board& board) {
     }
   }
   ch += 8;
+
+  // PST value planes (channels 112-117) — one per piece type
+  // Fills the former padding slots with positional priors for rapid learning.
+  for (int sq = 0; sq < 64; ++sq) {
+    Piece p = board.at(sq);
+    if (p == Piece::None) continue;
+    int pst_idx = static_cast<int>(type_of(p)) - 1;
+    if (pst_idx < 0 || pst_idx > 5) continue;
+    int lookup_sq = (color_of(p) == Color::White) ? sq : flip_rank(sq);
+    set_plane(out, ch + pst_idx, sq, PST_TABLES[pst_idx][lookup_sq]);
+  }
+  ch += 6;
 
   // Pad remaining channels to 119 with zeros (already zero)
   (void)ch;

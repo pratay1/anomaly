@@ -186,14 +186,38 @@ void init_magics() {
   initialized = true;
 }
 
+namespace {
+
+// Fast direct lookup: encode blockers into a table index by mapping
+// each set bit in the blocker pattern through the mask bits.
+inline int blockers_index(uint64_t blockers, uint64_t mask) {
+  // Scatter the set bits of blockers into the index by iterating
+  // through the set bits of the mask.
+  int idx = 0;
+  int bit = 0;
+  while (mask) {
+    int lsb = ctz(mask);
+    mask &= mask - 1;
+    if (blockers & (1ULL << lsb)) idx |= (1 << bit);
+    ++bit;
+  }
+  return idx;
+}
+
+}  // namespace
+
 uint64_t rook_attacks(int square, uint64_t occupied) {
   init_magics();
-  return slide_attacks(square, occupied, rook_dirs);
+  auto& entry = rook_magics[square];
+  uint64_t blockers = occupied & entry.mask;
+  return entry.attacks[blockers_index(blockers, entry.mask)];
 }
 
 uint64_t bishop_attacks(int square, uint64_t occupied) {
   init_magics();
-  return slide_attacks(square, occupied, bishop_dirs);
+  auto& entry = bishop_magics[square];
+  uint64_t blockers = occupied & entry.mask;
+  return entry.attacks[blockers_index(blockers, entry.mask)];
 }
 
 uint64_t knight_attacks(int square) {

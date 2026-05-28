@@ -30,6 +30,7 @@ class CentralLearner(QObject):
         buffer: ReplayBuffer,
         cfg: Config,
         stop_event: threading.Event,
+        model_lock: threading.Lock | None = None,
     ):
         super().__init__()
         self.model = model
@@ -48,7 +49,7 @@ class CentralLearner(QObject):
         )
         self.global_step = 0
         self._warmup_steps = 1000
-        self._train_lock = threading.Lock()
+        self._model_lock = model_lock or threading.Lock()
 
     def _warmup_lr(self, step: int, base_lr: float) -> float:
         if step < self._warmup_steps:
@@ -89,18 +90,19 @@ class CentralLearner(QObject):
         import az._az_core as core
 
         self.optimizer.zero_grad(set_to_none=True)
-        for p, g in zip(self.model.parameters(), grads):
-            p.grad = g
+        for p, g_ in zip(self.model.parameters(), grads):
+            p.grad = g_
         self.optimizer.step()
         self.global_step += 1
         raw_lr = self.cfg.learning_rate(self.global_step)
         lr = self._warmup_lr(self.global_step, raw_lr)
-        for g in self.optimizer.param_groups:
-            g["lr"] = lr
+        for pg in self.optimizer.param_groups:
+            pg["lr"] = lr
 
         self.model.eval()
         with torch.no_grad():
-            states, policies, values = self.buffer.sample(min(self.cfg.batch_size, len(self.buffer)))
+            bs = min(self.cfg.batch_size, len(self.buffer))
+            states, policies, values = self.buffer.sample(bs)
             b = states.shape[0]
             x = torch.from_numpy(states).view(b, core.ENCODING_CHANNELS, 8, 8).to(self.device)
             tp = torch.from_numpy(policies).to(self.device)
@@ -130,7 +132,7 @@ class CentralLearner(QObject):
         n_workers = max(1, min(self.cfg.gradient_avg_workers, self.cfg.batch_size))
         sub_batch = max(1, self.cfg.batch_size // n_workers)
 
-        with self._train_lock:
+        with self._model_lock:
             self.model.train()
             for _ in range(steps):
                 if self.stop_event.is_set():

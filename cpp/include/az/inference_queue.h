@@ -38,12 +38,16 @@ class InferenceQueue {
 
   int pending() const;
 
+  /// Fulfill all pending requests with zero policy/value so blocked MCTS threads
+  /// can unblock during shutdown. Safe to call from any thread.
+  void shutdown();
+
  private:
   mutable std::mutex mutex_;
   std::condition_variable cv_producer_;
   std::condition_variable cv_consumer_;
   std::deque<InferenceRequest> queue_;
-  int next_id_ = 0;
+  uint64_t next_id_ = 0;
 };
 
 }  // namespace az

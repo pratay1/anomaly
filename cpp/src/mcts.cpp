@@ -26,6 +26,7 @@ std::shared_ptr<MCTSNode> MCTS::select_child(std::shared_ptr<MCTSNode> node, flo
       best_key = key;
     }
   }
+  if (best_key < 0) best_key = node->children.begin()->first;
   return node->children.at(best_key);
 }
 
@@ -100,6 +101,7 @@ std::vector<float> MCTS::run(Board& board, float temperature) {
           break;
         }
       }
+      if (move_idx < 0) break;
       path.emplace_back(node, move_idx);
       Move m = index_to_move(sim_board, move_idx);
       sim_board.make_move(m);
@@ -122,11 +124,13 @@ std::vector<float> MCTS::run(Board& board, float temperature) {
           noise.push_back(n);
           sum += n;
         }
-        size_t i = 0;
-        for (auto& [k, ch] : node->children) {
-          float noisy = (1.0f - cfg_.dirichlet_eps) * ch->P +
-                        cfg_.dirichlet_eps * noise[i++] / sum;
-          ch->P = noisy;
+        if (sum > 0.0f) {
+          size_t i = 0;
+          for (auto& [k, ch] : node->children) {
+            float noisy = (1.0f - cfg_.dirichlet_eps) * ch->P +
+                          cfg_.dirichlet_eps * noise[i++] / sum;
+            ch->P = noisy;
+          }
         }
       }
     } else {

@@ -3,7 +3,6 @@ from __future__ import annotations
 import threading
 
 import pytest
-
 from az.config import Config
 from az.training.orchestrator import TrainerOrchestrator
 

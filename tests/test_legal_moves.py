@@ -1,6 +1,7 @@
 """Chess legality: no king capture, must leave check, promotion round-trip."""
 
 import az._az_core as core
+import az.core_compat  # noqa: F401
 import chess
 from az.training.selfplay_worker import move_to_uci
 

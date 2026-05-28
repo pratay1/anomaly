@@ -103,7 +103,9 @@ PYBIND11_MODULE(_az_core, m) {
             q.fulfill(ids, policies, values);
           },
           py::call_guard<py::gil_scoped_release>())
-      .def("pending", &az::InferenceQueue::pending);
+      .def("pending", &az::InferenceQueue::pending)
+      .def("shutdown", &az::InferenceQueue::shutdown,
+           py::call_guard<py::gil_scoped_release>());
 
   py::class_<az::MCTSConfig>(m, "MCTSConfig")
       .def(py::init<>())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import torch
@@ -16,6 +17,7 @@ class CheckpointManager:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.best_path = self.run_dir / "best.pt"
         self.meta_path = self.run_dir / "meta.json"
+        self._save_lock = threading.Lock()
 
     def save(
         self,
@@ -26,28 +28,31 @@ class CheckpointManager:
         tag: str | None = None,
         iteration: int = 0,
     ) -> Path:
-        path = self.run_dir / (f"ckpt_{step}.pt" if tag is None else f"ckpt_{tag}.pt")
-        payload = {
-            "state_dict": model.state_dict(),
-            "step": step,
-            "win_rate": win_rate,
-            "hparams": cfg.__dict__,
-        }
-        tmp = path.with_suffix(".tmp")
-        torch.save(payload, tmp)
-        tmp.replace(path)
-        meta = {"step": step, "win_rate": win_rate, "latest": str(path)}
-        self.meta_path.write_text(json.dumps(meta, indent=2))
-        if win_rate >= 0.5 or not self.best_path.exists():
-            torch.save(payload, self.best_path)
-        save_brain(
-            model,
-            cfg,
-            step,
-            win_rate=win_rate,
-            iteration=iteration,
-            run_dir=self.run_dir,
-        )
+        with self._save_lock:
+            path = self.run_dir / (f"ckpt_{step}.pt" if tag is None else f"ckpt_{tag}.pt")
+            payload = {
+                "state_dict": model.state_dict(),
+                "step": step,
+                "win_rate": win_rate,
+                "hparams": cfg.__dict__,
+            }
+            tmp = path.with_suffix(".tmp")
+            torch.save(payload, tmp)
+            tmp.replace(path)
+            meta = {"step": step, "win_rate": win_rate, "latest": str(path)}
+            meta_tmp = self.meta_path.with_suffix(".json.tmp")
+            meta_tmp.write_text(json.dumps(meta, indent=2))
+            meta_tmp.replace(self.meta_path)
+            if win_rate >= 0.5 or not self.best_path.exists():
+                torch.save(payload, self.best_path)
+            save_brain(
+                model,
+                cfg,
+                step,
+                win_rate=win_rate,
+                iteration=iteration,
+                run_dir=self.run_dir,
+            )
         return path
 
     def load_best(self, model: AlphaZeroResNet, device: str = "cpu") -> int:

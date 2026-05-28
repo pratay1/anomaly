@@ -1,5 +1,5 @@
-from types import SimpleNamespace
 import threading
+from types import SimpleNamespace
 
 from az.config import Config
 from az.training.replay_buffer import ReplayBuffer

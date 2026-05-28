@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 @dataclass
 class Config:
     # Network (lighter defaults — less VRAM/RAM pressure on consumer GPUs)

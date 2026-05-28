@@ -29,8 +29,8 @@ try:
         QCoreApplication,
         QMetaObject,
         QObject,
-        QThread,
         Qt,
+        QThread,
         pyqtSignal,
         pyqtSlot,
     )
@@ -72,6 +72,7 @@ class TrainerOrchestrator(QObject):
         self.queue = core.InferenceQueue()
         align_cfg_with_brain(cfg)
         self.model = AlphaZeroResNet(cfg)
+        self._model_lock = threading.Lock()
         self.buffer = ReplayBuffer(
             cfg.replay_capacity,
             cfg.encoding_channels * 64,
@@ -86,10 +87,14 @@ class TrainerOrchestrator(QObject):
         self._visit_buffer: dict[str, list] = {}
         load_brain(self.model, device="cpu")
         # SGD must run on the Qt GUI thread (see _run_learner_steps).
-        self.learner = CentralLearner(self.model, self.buffer, self.cfg, self.stop_event)
+        self.learner = CentralLearner(
+            self.model, self.buffer, self.cfg, self.stop_event, self._model_lock
+        )
 
     def start(self) -> None:
-        self.inference = InferenceServer(self.queue, self.model, self.cfg, self.stop_event)
+        self.inference = InferenceServer(
+            self.queue, self.model, self.cfg, self.stop_event, self._model_lock
+        )
         self.inference.start()
         self.selfplay = ParallelSelfPlayPool(
             self.queue, self.buffer, self.cfg, self.stop_event, self._selfplay_events
@@ -106,9 +111,9 @@ class TrainerOrchestrator(QObject):
                     self._handle_training_failure(exc)
                     time.sleep(1.0)
 
-        t_train = threading.Thread(target=training_loop, daemon=True, name="TrainingLoop")
+        t_train = threading.Thread(target=training_loop, name="TrainingLoop")
         t_train.start()
-        self._threads = [t_train, self.inference]
+        self._threads.append(t_train)
 
         def monitor():
             while not self.stop_event.is_set():
@@ -127,7 +132,9 @@ class TrainerOrchestrator(QObject):
                 except Exception as exc:
                     self._handle_training_failure(exc)
 
-        threading.Thread(target=monitor, daemon=True, name="Monitor").start()
+        t_mon = threading.Thread(target=monitor, name="Monitor")
+        t_mon.start()
+        self._threads.append(t_mon)
 
     def _run_training_iteration(self) -> None:
         assert self.selfplay is not None and self.learner is not None and self.inference is not None
@@ -140,6 +147,8 @@ class TrainerOrchestrator(QObject):
         step = self.learner.global_step
         self._iteration += 1
         try:
+            with self._model_lock:
+                state_dict = self.model.state_dict()
             brain_path = save_brain(
                 self.model,
                 self.cfg,
@@ -153,7 +162,7 @@ class TrainerOrchestrator(QObject):
                 step,
                 iteration=self._iteration,
             )
-            self.inference.reload_weights(self.model.state_dict())
+            self.inference.reload_weights(state_dict)
         except Exception as exc:
             self._handle_training_failure(exc)
             return
@@ -216,8 +225,13 @@ class TrainerOrchestrator(QObject):
 
     def stop(self) -> None:
         self.stop_event.set()
+        self.queue.shutdown()
+        if self.inference is not None:
+            self.inference.join(timeout=5)
         if self.selfplay is not None:
             self.selfplay._close_stockfish()
+        for t in self._threads:
+            t.join(timeout=3)
 
     def set_training_opponent(self, opponent: str) -> str | None:
         """Switch training mode at runtime. Returns an error message on failure."""

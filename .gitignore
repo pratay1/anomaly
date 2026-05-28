@@ -1,10 +1,37 @@
+# Build artifacts
+_build/
 build/
 dist/
 *.egg-info/
+python/az/_az_core.*.pyd
+python/az/_az_core.*.so
+python/az/_az_core.*.dylib
+*.pyd.bak
+
+# Python
 __pycache__/
-*.pyd
-*.so
-*.dylib
-runs/
+*.pyc
+*.pyo
+.mypy_cache/
+.ruff_cache/
 .pytest_cache/
+
+# Training output
+runs/
 *.pt
+*.pt.tmp
+*.json.tmp
+
+# Debug logs
+debug-*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

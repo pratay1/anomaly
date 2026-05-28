@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 from pathlib import Path
 
 import chess
@@ -27,6 +28,22 @@ def _move_to_uci(m: core.Move) -> str:
     return uci
 
 
+def _kill_engine(engine: chess.engine.SimpleEngine | None) -> None:
+    """Force-kill the engine process to prevent hangs on quit()."""
+    if engine is None:
+        return
+    try:
+        if engine._process is not None:
+            engine._process.kill()
+            engine._process.wait(timeout=5)
+    except Exception:
+        pass
+    try:
+        engine.quit()
+    except Exception:
+        pass
+
+
 class StockfishEngine:
     """Synchronous UCI engine for serial Stockfish training (one caller thread)."""
 
@@ -36,10 +53,7 @@ class StockfishEngine:
 
     def _restart(self) -> chess.engine.SimpleEngine:
         if self._engine is not None:
-            try:
-                self._engine.quit()
-            except Exception:
-                pass
+            _kill_engine(self._engine)
             self._engine = None
         path = Path(self.cfg.stockfish_path)
         err = stockfish_path_error(path)
@@ -50,19 +64,25 @@ class StockfishEngine:
 
     def choose_move(self, board: core.Board) -> core.Move:
         fen = board.fen()
+        timeout_s = self.cfg.stockfish_movetime_ms / 1000.0 + 5.0
         limit = chess.engine.Limit(time=self.cfg.stockfish_movetime_ms / 1000.0)
         last_err: Exception | None = None
         for _ in range(4):
             try:
                 engine = self._engine if self._engine is not None else self._restart()
-                result = engine.play(chess.Board(fen), limit)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    board_obj = chess.Board(fen)
+                    fut = pool.submit(engine.play, board_obj, limit)
+                    result = fut.result(timeout=timeout_s)
                 if result.move is None:
                     raise RuntimeError("Stockfish returned no move")
                 uci = result.move.uci()
                 ch_move = result.move
                 break
-            except (chess.engine.EngineError, OSError) as exc:
+            except (chess.engine.EngineError, OSError, concurrent.futures.TimeoutError) as exc:
                 last_err = exc
+                _kill_engine(engine)
+                self._engine = None
                 self._restart()
         else:
             raise last_err or RuntimeError("Stockfish failed to return a move")
@@ -81,8 +101,5 @@ class StockfishEngine:
 
     def close(self) -> None:
         if self._engine is not None:
-            try:
-                self._engine.quit()
-            except Exception:
-                pass
+            _kill_engine(self._engine)
             self._engine = None

@@ -66,22 +66,29 @@ class PlayVsNetDialog(QDialog):
 
     def _clear_selection(self) -> None:
         self._selected_sq = None
+        scene = self.board_view.scene()
+        if scene is None:
+            return
         for r in self._selection_rects:
-            self.board_view.scene().removeItem(r)
+            scene.removeItem(r)
         self._selection_rects.clear()
 
     def _highlight_square(self, sq: int) -> None:
         self._clear_selection()
+        scene = self.board_view.scene()
+        if scene is None:
+            return
         f = chess.square_file(sq)
         r = chess.square_rank(sq)
         x = f * BoardView.SQUARE
         y = (7 - r) * BoardView.SQUARE
-        rect = self.board_view.scene().addRect(
+        rect = scene.addRect(
             x, y, BoardView.SQUARE, BoardView.SQUARE,
             pen=QPen(QColor("#7a7a7a"), 3),
         )
-        rect.setZValue(20)
-        self._selection_rects.append(rect)
+        if rect is not None:
+            rect.setZValue(20)
+            self._selection_rects.append(rect)
 
     def _on_square_clicked(self, sq: int) -> None:
         if self._engine_thinking or not self._human_turn:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import chess
-from PyQt6.QtCore import pyqtSignal, QPointF, QPropertyAnimation, Qt, QVariantAnimation
+from PyQt6.QtCore import QPointF, QPropertyAnimation, Qt, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 from PyQt6.QtWidgets import (
@@ -21,7 +21,6 @@ from az.gui.theme import (
     HEAT_HIGH,
     HEAT_LOW,
     HEAT_MID,
-    LAST_MOVE_HIGHLIGHT,
     LIGHT_SQUARE,
     THINKING_GLOW,
 )
@@ -85,7 +84,7 @@ class BoardView(QGraphicsView):
         self.setGraphicsEffect(shadow)
 
         self._heat_overlays: dict[int, QGraphicsRectItem] = {}
-        self._last_move_overlays: list[QGraphicsRectItem] = []
+        self._result_overlay_items: list = []
         self._pieces: dict[int, QGraphicsSvgItem] = {}
         self._build_board()
         self._pulse = _PulseRing(8 * self.SQUARE)
@@ -221,23 +220,34 @@ class BoardView(QGraphicsView):
         self.set_heatmap(heat)
 
     def clear_last_move(self) -> None:
-        for item in self._last_move_overlays:
-            self._scene().removeItem(item)
-        self._last_move_overlays.clear()
+        pass
 
     def set_last_move(self, from_sq: int, to_sq: int) -> None:
-        self.clear_last_move()
-        for sq in (from_sq, to_sq):
-            f = chess.square_file(sq)
-            r = chess.square_rank(sq)
-            x = f * self.SQUARE
-            y = (7 - r) * self.SQUARE
-            overlay = QGraphicsRectItem(x, y, self.SQUARE, self.SQUARE)
-            overlay.setBrush(QBrush(QColor(LAST_MOVE_HIGHLIGHT)))
-            overlay.setPen(QPen(Qt.PenStyle.NoPen))
-            overlay.setZValue(7)
-            self._scene().addItem(overlay)
-            self._last_move_overlays.append(overlay)
+        pass
+
+    def show_result_overlay(self, text: str) -> None:
+        self.hide_result_overlay()
+        size = 8 * self.SQUARE
+        bg = QGraphicsRectItem(0, 0, size, size)
+        bg.setBrush(QBrush(QColor(0, 0, 0, 168)))
+        bg.setPen(QPen(Qt.PenStyle.NoPen))
+        bg.setZValue(25)
+        self._scene().addItem(bg)
+        label = QGraphicsSimpleTextItem(text)
+        font = QFont("Segoe UI", 22)
+        font.setWeight(QFont.Weight.Bold)
+        label.setFont(font)
+        label.setBrush(QBrush(QColor("#e5e5e5")))
+        label.setZValue(26)
+        br = label.boundingRect()
+        label.setPos(size / 2 - br.width() / 2, size / 2 - br.height() / 2)
+        self._scene().addItem(label)
+        self._result_overlay_items = [bg, label]
+
+    def hide_result_overlay(self) -> None:
+        for item in self._result_overlay_items:
+            self._scene().removeItem(item)
+        self._result_overlay_items.clear()
 
     def set_thinking(self, active: bool) -> None:
         self._pulse.pulse(active)
@@ -309,6 +319,7 @@ class BoardView(QGraphicsView):
             return
 
         old_board = self._last_board
+        self.hide_result_overlay()
         self.clear_heatmap()
 
         if old_board is None or not animated:

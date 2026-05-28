@@ -7,7 +7,13 @@ from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 from PyQt6.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsView
 
 from az.gui.piece_assets import PieceAssetManager
-from az.gui.theme import DARK_SQUARE, HEAT_HIGH, HEAT_LOW, HEAT_MID, LAST_MOVE_HIGHLIGHT, LIGHT_SQUARE
+from az.gui.theme import (
+    DARK_SQUARE,
+    HEAT_HIGH,
+    HEAT_LOW,
+    HEAT_MID,
+    LIGHT_SQUARE,
+)
 
 
 class MiniBoardView(QGraphicsView):
@@ -28,9 +34,10 @@ class MiniBoardView(QGraphicsView):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setMinimumSize(self.SQUARE * 8 + 4, self.SQUARE * 8 + 4)
         self.setMaximumSize(self.SQUARE * 8 + 4, self.SQUARE * 8 + 4)
-        self.setStyleSheet("background: transparent; border: 1px solid #2a2a2a; border-radius: 4px;")
+        self.setStyleSheet(
+            "background: transparent; border: 1px solid #2a2a2a; border-radius: 4px;"
+        )
         self._heat_overlays: dict[int, QGraphicsRectItem] = {}
-        self._last_move_overlays: list[QGraphicsRectItem] = []
         self._pieces: dict[int, QGraphicsSvgItem] = {}
         self._build_board()
         self.set_fen(chess.STARTING_FEN)
@@ -130,23 +137,10 @@ class MiniBoardView(QGraphicsView):
             self._pieces[sq] = item
 
     def clear_last_move(self) -> None:
-        for item in self._last_move_overlays:
-            self._scene().removeItem(item)
-        self._last_move_overlays.clear()
+        pass
 
     def set_last_move(self, from_sq: int, to_sq: int) -> None:
-        self.clear_last_move()
-        for sq in (from_sq, to_sq):
-            f = chess.square_file(sq)
-            r = chess.square_rank(sq)
-            x = f * self.SQUARE
-            y = (7 - r) * self.SQUARE
-            overlay = QGraphicsRectItem(x, y, self.SQUARE, self.SQUARE)
-            overlay.setBrush(QBrush(QColor(LAST_MOVE_HIGHLIGHT)))
-            overlay.setPen(QPen(Qt.PenStyle.NoPen))
-            overlay.setZValue(4)
-            self._scene().addItem(overlay)
-            self._last_move_overlays.append(overlay)
+        pass
 
     def set_fen(self, fen: str, animated: bool = False) -> None:
         _ = animated
@@ -156,7 +150,6 @@ class MiniBoardView(QGraphicsView):
             return
         for overlay in self._heat_overlays.values():
             overlay.setVisible(False)
-        self.clear_last_move()
         self._rebuild_all(board)
 
     def mousePressEvent(self, event):

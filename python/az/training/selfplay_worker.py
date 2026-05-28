@@ -7,6 +7,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from types import SimpleNamespace
 
 import az._az_core as core
+import az.core_compat  # noqa: F401 — patch stale _az_core after merges
 from az.config import Config
 from az.ipc.events import GameFinished, MovePlayed
 from az.training.replay_buffer import ReplayBuffer
@@ -230,6 +231,7 @@ class ParallelSelfPlayPool:
         self.outbound_events = outbound_events if outbound_events is not None else queue.Queue()
         self._game_seq = 0
         self._game_seq_lock = threading.Lock()
+        self._stockfish_lock = threading.Lock()
         self._stockfish: StockfishEngine | None = None
 
     def _next_game_seq(self) -> int:
@@ -239,9 +241,10 @@ class ParallelSelfPlayPool:
             return seq
 
     def _close_stockfish(self) -> None:
-        if self._stockfish is not None:
-            self._stockfish.close()
-            self._stockfish = None
+        with self._stockfish_lock:
+            if self._stockfish is not None:
+                self._stockfish.close()
+                self._stockfish = None
 
     def restart_stockfish(self) -> None:
         """Recycle the UCI engine after a crash without stopping training."""
@@ -263,11 +266,10 @@ class ParallelSelfPlayPool:
         err = stockfish_path_error(self.cfg.stockfish_path)
         if err:
             raise FileNotFoundError(err)
-        if self._stockfish is None:
-            with self._game_seq_lock:
-                if self._stockfish is None:
-                    self._stockfish = StockfishEngine(self.cfg)
-        return self._stockfish
+        with self._stockfish_lock:
+            if self._stockfish is None:
+                self._stockfish = StockfishEngine(self.cfg)
+            return self._stockfish
 
     def _forward_event(self, item: tuple) -> None:
         self.outbound_events.put(item)
@@ -292,8 +294,9 @@ class ParallelSelfPlayPool:
 
         all_examples: list = []
         event_queue: queue.Queue = queue.Queue()
+        event_sink = self.outbound_events if stockfish_mode else event_queue
 
-        def play_game(game_id: int) -> list:
+        def play_game(game_id: int, _engine=stockfish_engine) -> list:
             if self.stop_event.is_set():
                 return []
             game_seq = self._next_game_seq()
@@ -304,25 +307,24 @@ class ParallelSelfPlayPool:
                 self.stop_event,
                 game_id=game_id,
                 rng=rng,
-                event_sink=event_queue,
+                event_sink=event_sink,
                 game_seq=game_seq,
-                stockfish=stockfish_engine,
+                stockfish=_engine,
             )
 
         if stockfish_mode:
             for attempt in range(3):
                 try:
+                    self._drain_events(self.outbound_events)
                     examples = play_game(0)
                     self.buffer.add_batch(examples)
                     all_examples.extend(examples)
-                    self._drain_events(event_queue)
                     return all_examples
                 except Exception:
                     self.restart_stockfish()
                     stockfish_engine = self._stockfish_engine()
                     if attempt == 2:
-                        self._drain_events(event_queue)
-                        return all_examples
+                        raise
             return all_examples
 
         lock = threading.Lock()

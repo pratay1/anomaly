@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
             if self.cfg.training_opponent == "stockfish"
             else "self-play"
         )
-        subtitle = QLabel(f"AlphaZero · {mode_label}")
+        subtitle = QLabel(f"{mode_label}")
         subtitle.setObjectName("subtitle")
         self.subtitle = subtitle
         title_row.addWidget(self.title)
@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         if not o:
             return
         if o.learner:
-            o.learner.train_step.connect(self._on_train, Qt.ConnectionType.QueuedConnection)
+            o.learner.train_step.connect(self._on_train)
         o.game_finished.connect(self._on_game)
         o.move_played.connect(self._on_move)
         self._event_timer.start()
@@ -230,6 +230,14 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.status.showMessage(f"UI error (training continues): {exc}")
 
+    @staticmethod
+    def _result_to_text(result: str) -> str:
+        if result == "1-0":
+            return "White wins"
+        if result == "0-1":
+            return "Black wins"
+        return "Draw"
+
     def _on_game_impl(self, game: GameFinished) -> None:
         gid = game.game_id
         if gid in self._game_states:
@@ -246,9 +254,20 @@ class MainWindow(QMainWindow):
             self.games_panel.add_game(game)
             self.metrics.on_game_finished()
             self._ply_token += 1
-            self._latest_post_fen = chess.STARTING_FEN
-            self.board_view.clear_last_move()
-            self.board_view.set_fen(chess.STARTING_FEN, animated=False)
+            token = self._ply_token
+            final_fen = self._game_states[gid].fen if gid in self._game_states else chess.STARTING_FEN
+            self._latest_post_fen = final_fen
+            self.board_view.set_fen(final_fen, animated=False)
+            self.board_view.show_result_overlay(self._result_to_text(game.result))
+            QTimer.singleShot(2500, lambda t=token: self._reset_after_game(t))
+
+    def _reset_after_game(self, token: int) -> None:
+        if token != self._ply_token:
+            return
+        self._ply_token += 1
+        self._latest_post_fen = chess.STARTING_FEN
+        self.board_view.set_fen(chess.STARTING_FEN, animated=False)
+        self.mcts_panel.set_searching()
 
     @staticmethod
     def _fen_after_move(mv: MovePlayed, fallback_fen: str) -> str:
@@ -301,8 +320,8 @@ class MainWindow(QMainWindow):
             self.board_view.set_fen(mv.fen, animated=False)
             self.mcts_panel.update_visits(mv.fen, mv.visits)
             delay = max(0, self.cfg.mcts_reveal_ms)
-            cb = lambda t=token, fs=from_sq, ts=to_sq: self._commit_ply(t, fs, ts)
-            QTimer.singleShot(delay, cb)
+            t, fs, ts = token, from_sq, to_sq
+            QTimer.singleShot(delay, lambda: self._commit_ply(t, fs, ts))
         else:
             self.board_view.set_fen(post_fen, animated=True)
             if from_sq is not None and to_sq is not None:

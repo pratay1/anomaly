@@ -126,6 +126,30 @@ def test_stockfish_mode_runs_one_serial_game():
     assert cfg.games_per_selfplay_iteration() == 1
 
 
+def test_stockfish_mode_publishes_live_events_to_outbound_queue():
+    cfg = Config()
+    cfg.training_opponent = "stockfish"
+    stop = threading.Event()
+    queue_inf = core.InferenceQueue()
+    buf = ReplayBuffer(1000, cfg.encoding_channels * 64, cfg.policy_size)
+    outbound: queue.Queue = queue.Queue()
+    pool = ParallelSelfPlayPool(queue_inf, buf, cfg, stop, outbound)
+
+    def fake_play(*args, **kwargs):
+        event_sink = kwargs["event_sink"]
+        assert event_sink is outbound
+        event_sink.put(("move_played", "live"))
+        return []
+
+    with (
+        patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play),
+        patch.object(pool, "_stockfish_engine", return_value=MagicMock()),
+    ):
+        pool.run_iteration(3)
+
+    assert outbound.get_nowait() == ("move_played", "live")
+
+
 def test_set_training_opponent_closes_stockfish_engine():
     cfg = Config()
     cfg.training_opponent = "stockfish"

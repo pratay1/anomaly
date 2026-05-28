@@ -2,8 +2,6 @@
 
 import threading
 
-import torch
-
 from az.config import Config
 from az.network.resnet import AlphaZeroResNet
 from az.training.inference_server import InferenceServer

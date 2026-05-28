@@ -175,8 +175,12 @@ void Board::load_fen(const std::string& fen) {
   } else {
     int f = ep[0] - 'a';
     int r = ep[1] - '1';
-    en_passant_sq_ = sq(f, r);
-    hash_ ^= zobrist_ep[en_passant_sq_];
+    if (f >= 0 && f < 8 && r >= 0 && r < 8) {
+      en_passant_sq_ = sq(f, r);
+      hash_ ^= zobrist_ep[en_passant_sq_];
+    } else {
+      en_passant_sq_ = -1;
+    }
   }
 
   halfmove_clock_ = halfmove;
@@ -323,7 +327,7 @@ void Board::make_move(const Move& m) {
 
   if (type_of(moving) == PieceType::Pawn && std::abs(m.to - m.from) == 16) {
     en_passant_sq_ = m.from + (stm_ == Color::White ? 8 : -8);
-    hash_ ^= zobrist_ep[en_passant_sq_];
+    if (en_passant_sq_ >= 0 && en_passant_sq_ < 64) hash_ ^= zobrist_ep[en_passant_sq_];
   }
 
   if (type_of(moving) == PieceType::King) castling_ &= stm_ == Color::White ? 0xC : 0x3;
@@ -343,6 +347,7 @@ void Board::make_move(const Move& m) {
 }
 
 void Board::unmake_move(const Move& m) {
+  if (undo_stack_.empty()) return;
   auto u = undo_stack_.back();
   undo_stack_.pop_back();
   if (!history_.empty()) history_.pop_back();
@@ -375,7 +380,7 @@ void Board::unmake_move(const Move& m) {
   }
 
   if (m.flag == MoveFlag::EnPassant) {
-    int cap_sq = m.to + (stm_ == Color::White ? 8 : -8);
+    int cap_sq = m.to + (stm_ == Color::White ? -8 : 8);
     place(u.captured, cap_sq);
   } else if (u.captured != Piece::None) {
     place(u.captured, m.to);
@@ -432,14 +437,14 @@ bool Board::in_check(Color c) const {
 bool Board::is_checkmate() const {
   if (!in_check(stm_)) return false;
   std::vector<Move> moves;
-  const_cast<Board*>(this)->generate_legal_moves(moves);
+  generate_legal_moves(moves);
   return moves.empty();
 }
 
 bool Board::is_stalemate() const {
   if (in_check(stm_)) return false;
   std::vector<Move> moves;
-  const_cast<Board*>(this)->generate_legal_moves(moves);
+  generate_legal_moves(moves);
   return moves.empty();
 }
 
