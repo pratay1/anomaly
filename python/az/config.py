@@ -14,8 +14,8 @@ class Config:
     encoding_channels: int = 119
 
     # MCTS — time budget per move (random between min and max each ply)
-    mcts_think_time_ms_min: int = 1000
-    mcts_think_time_ms_max: int = 3000
+    mcts_think_time_ms_min: int = 500
+    mcts_think_time_ms_max: int = 1000
     c_puct_base: float = 19652.0
     c_puct_init: float = 1.25
     dirichlet_alpha: float = 0.3
