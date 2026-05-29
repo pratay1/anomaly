@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,8 +13,9 @@ class Config:
     policy_size: int = 4672
     encoding_channels: int = 119
 
-    # MCTS (search "thinking" per move — lower = faster self-play, less compute per ply)
-    num_simulations: int = 32
+    # MCTS — time budget per move (random between min and max each ply)
+    mcts_think_time_ms_min: int = 1000
+    mcts_think_time_ms_max: int = 3000
     c_puct_base: float = 19652.0
     c_puct_init: float = 1.25
     dirichlet_alpha: float = 0.3
@@ -23,7 +25,7 @@ class Config:
     # Self-play
     num_workers: int = 2
     games_per_iteration: int = 4
-    max_game_length: int = 120
+    max_game_length: int = 256
     training_opponent: str = "self"  # "self" or "stockfish"
     stockfish_path: Path = field(
         default_factory=lambda: Path(r"C:\Users\prata\stockfish\stockfish.exe")
@@ -60,6 +62,14 @@ class Config:
     board_anim_ms: int = 160
     mcts_reveal_ms: int = 400  # GUI: show search heatmap before applying the move
 
+    # Stockfish Critic — supervised imitation signal from SF during Anomaly's turns
+    # Enabled automatically when SF is available; set False to disable.
+    stockfish_critic_enabled: bool = True
+    # Weight applied to the critic cross-entropy loss relative to self-play loss.
+    stockfish_critic_weight: float = 0.3
+    # Capacity of the critic ring buffer (independent from the self-play buffer).
+    stockfish_critic_capacity: int = 20_000
+
     # Paths
     run_dir: Path = field(default_factory=lambda: Path("runs") / "default")
     brain_path: Path = field(default_factory=lambda: Path("anomaly.pt"))
@@ -75,11 +85,15 @@ class Config:
                 lr = v
         return lr
 
+    def random_think_time_ms(self, rng: random.Random | None = None) -> int:
+        lo = min(self.mcts_think_time_ms_min, self.mcts_think_time_ms_max)
+        hi = max(self.mcts_think_time_ms_min, self.mcts_think_time_ms_max)
+        return (rng or random.Random()).randint(lo, hi)
+
     def to_mcts_config(self):
         import az._az_core as core
 
         cfg = core.MCTSConfig()
-        cfg.num_simulations = self.num_simulations
         cfg.c_puct_base = self.c_puct_base
         cfg.c_puct_init = self.c_puct_init
         cfg.dirichlet_alpha = self.dirichlet_alpha

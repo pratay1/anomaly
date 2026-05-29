@@ -17,7 +17,6 @@ def test_play_one_game_stockfish_only_records_mcts_plies():
     cfg.training_opponent = "stockfish"
     cfg.max_game_length = 4
     cfg.temperature_moves = 0
-    cfg.num_simulations = 2
     stop = threading.Event()
     queue_inf = core.InferenceQueue()
     events: queue.Queue = queue.Queue()
@@ -68,7 +67,7 @@ def test_game_seq_alternates_mcts_color():
 
     seen_colors: list[int] = []
 
-    def fake_run(board, temp):
+    def fake_run(board, temp, think_ms=0):
         seen_colors.append(board.side_to_move())
         pi = [0.0] * cfg.policy_size
         legal = core.legal_move_indices(board)

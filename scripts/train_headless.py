@@ -9,7 +9,8 @@ from az.training.orchestrator import TrainerOrchestrator
 
 def main():
     cfg = Config()
-    cfg.num_simulations = 25
+    cfg.mcts_think_time_ms_min = 200
+    cfg.mcts_think_time_ms_max = 500
     cfg.max_batch = 16
     cfg.num_workers = 2
     orch = TrainerOrchestrator(cfg)

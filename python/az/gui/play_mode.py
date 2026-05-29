@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import threading
 from pathlib import Path
 
@@ -25,7 +26,8 @@ class PlayVsNetDialog(QDialog):
         self.resize(560, 680)
         self.setMinimumSize(440, 540)
         self.cfg = Config()
-        self.cfg.num_simulations = 100
+        self.cfg.mcts_think_time_ms_min = 1000
+        self.cfg.mcts_think_time_ms_max = 3000
         self.run_dir = Path(run_dir) if run_dir else resolve_brain_path().parent
 
         layout = QVBoxLayout(self)
@@ -181,7 +183,8 @@ class PlayVsNetDialog(QDialog):
         self._engine_thinking = True
         try:
             mcts = core.MCTS(self.queue, self.cfg.to_mcts_config())
-            pi = mcts.run(self.cpp_board, 0.1)
+            think_ms = self.cfg.random_think_time_ms()
+            pi = mcts.run(self.cpp_board, 0.1, think_ms)
             legal = core.legal_move_indices(self.cpp_board)
             if not legal:
                 self._engine_thinking = False

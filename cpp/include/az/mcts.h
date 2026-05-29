@@ -33,7 +33,8 @@ class MCTS {
  public:
   MCTS(InferenceQueue* queue, const MCTSConfig& cfg);
 
-  std::vector<float> run(Board& board, float temperature = 1.0f);
+  /// think_time_ms > 0: search until deadline; else run cfg_.num_simulations.
+  std::vector<float> run(Board& board, float temperature = 1.0f, int think_time_ms = 0);
   /// Reuse search tree after playing move_index (skips rebuilding root each ply).
   void advance_root(int move_index);
   void reset_tree();

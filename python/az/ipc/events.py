@@ -11,6 +11,7 @@ class TrainStep:
     value_loss: float
     total_loss: float
     lr: float
+    critic_loss: float = 0.0
 
 
 @dataclass

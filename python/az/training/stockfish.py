@@ -62,10 +62,11 @@ class StockfishEngine:
         self._engine = chess.engine.SimpleEngine.popen_uci(str(path))
         return self._engine
 
-    def choose_move(self, board: core.Board) -> core.Move:
+    def _query_uci(self, board: core.Board, movetime_ms: int) -> tuple[str, chess.Move]:
+        """Run the engine for movetime_ms and return (uci_str, chess.Move)."""
         fen = board.fen()
-        timeout_s = self.cfg.stockfish_movetime_ms / 1000.0 + 5.0
-        limit = chess.engine.Limit(time=self.cfg.stockfish_movetime_ms / 1000.0)
+        limit = chess.engine.Limit(time=movetime_ms / 1000.0)
+        timeout_s = movetime_ms / 1000.0 + 5.0
         last_err: Exception | None = None
         for _ in range(4):
             try:
@@ -76,28 +77,46 @@ class StockfishEngine:
                     result = fut.result(timeout=timeout_s)
                 if result.move is None:
                     raise RuntimeError("Stockfish returned no move")
-                uci = result.move.uci()
-                ch_move = result.move
-                break
+                return result.move.uci(), result.move
             except (chess.engine.EngineError, OSError, concurrent.futures.TimeoutError) as exc:
                 last_err = exc
-                _kill_engine(engine)
+                _kill_engine(self._engine)
                 self._engine = None
                 self._restart()
-        else:
-            raise last_err or RuntimeError("Stockfish failed to return a move")
+        raise last_err or RuntimeError("Stockfish failed to return a move")
 
+    def _uci_to_core_move(
+        self, board: core.Board, uci: str, ch_move: chess.Move
+    ) -> tuple[core.Move, int]:
+        """Resolve a UCI string to (core.Move, move_index).  Raises if not legal."""
         legal = core.legal_move_indices(board)
         for idx in legal:
             mv = core.index_to_move(board, idx)
             if _move_to_uci(mv) == uci:
-                return mv
+                return mv, idx
             try:
                 if chess.Move.from_uci(_move_to_uci(mv)) == ch_move:
-                    return mv
+                    return mv, idx
             except ValueError:
                 pass
-        raise RuntimeError(f"Stockfish move {uci!r} is not legal in position {fen!r}")
+        raise RuntimeError(
+            f"Stockfish move {uci!r} is not legal in position {board.fen()!r}"
+        )
+
+    def choose_move(self, board: core.Board) -> core.Move:
+        uci, ch_move = self._query_uci(board, self.cfg.stockfish_movetime_ms)
+        mv, _ = self._uci_to_core_move(board, uci, ch_move)
+        return mv
+
+    def choose_move_with_idx(
+        self, board: core.Board, movetime_ms: int
+    ) -> tuple[core.Move, int]:
+        """Return (move, move_index) using a specific time limit.
+
+        Used by the Stockfish Critic to get SF's opinion at Anomaly's think budget.
+        """
+        uci, ch_move = self._query_uci(board, movetime_ms)
+        return self._uci_to_core_move(board, uci, ch_move)
 
     def close(self) -> None:
         if self._engine is not None:

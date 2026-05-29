@@ -11,7 +11,6 @@ def test_mcts_forward_terminates():
     import az._az_core as core
 
     cfg = Config()
-    cfg.num_simulations = 5
     cfg.max_batch = 8
     cfg.max_wait_us = 3000
     queue = core.InferenceQueue()
@@ -21,8 +20,10 @@ def test_mcts_forward_terminates():
     srv.start()
 
     board = core.Board()
-    mcts = core.MCTS(queue, cfg.to_mcts_config())
-    pi = mcts.run(board, 1.0)
+    mcts_cfg = cfg.to_mcts_config()
+    mcts_cfg.num_simulations = 5
+    mcts = core.MCTS(queue, mcts_cfg)
+    pi = mcts.run(board, 1.0, 0)
 
     stop.set()
     srv.join(timeout=3)
@@ -35,7 +36,6 @@ def test_mcts_advance_root():
     import az._az_core as core
 
     cfg = Config()
-    cfg.num_simulations = 5
     cfg.max_batch = 8
     cfg.max_wait_us = 3000
     queue = core.InferenceQueue()
@@ -45,8 +45,10 @@ def test_mcts_advance_root():
     srv.start()
 
     board = core.Board()
-    mcts = core.MCTS(queue, cfg.to_mcts_config())
-    _pi = mcts.run(board, 0.1)
+    mcts_cfg = cfg.to_mcts_config()
+    mcts_cfg.num_simulations = 5
+    mcts = core.MCTS(queue, mcts_cfg)
+    _pi = mcts.run(board, 0.1, 0)
     legal = core.legal_move_indices(board)
     assert legal, "Expected at least one legal move"
 
@@ -56,7 +58,7 @@ def test_mcts_advance_root():
     mcts.advance_root(idx)
 
     # Run again after advancing root
-    pi2 = mcts.run(board, 1.0)
+    pi2 = mcts.run(board, 1.0, 0)
     assert abs(sum(pi2) - 1.0) < 0.01
 
     stop.set()

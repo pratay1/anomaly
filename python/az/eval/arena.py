@@ -43,7 +43,7 @@ def evaluate_vs_random(
 
     mcts_cfg = cfg.to_mcts_config()
     mcts_cfg.add_root_noise = False
-    mcts_cfg.num_simulations = max(50, cfg.num_simulations // 2)
+    think_ms = (cfg.mcts_think_time_ms_min + cfg.mcts_think_time_ms_max) // 2
     stop = threading.Event()
     inf = InferenceServer(queue, model, cfg, stop)
     inf.start()
@@ -55,7 +55,7 @@ def evaluate_vs_random(
             res = board.result()
             if res != core.GameResult.Ongoing:
                 break
-            pi = mcts.run(board, 0.1)
+            pi = mcts.run(board, 0.1, think_ms)
             legal = core.legal_move_indices(board)
             if not legal:
                 break

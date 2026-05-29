@@ -90,8 +90,10 @@ def play_one_game(
 
         temp = 1.0 if mcts_ply < cfg.temperature_moves else 0.1
         mcts_ply += 1
-        pi = mcts.run(board, temp)
+        think_ms = cfg.random_think_time_ms(rng)
+        pi = mcts.run(board, temp, think_ms)
         fen = board.fen()
+        state_enc = core.encode(board)
         visit_dicts: list[dict] = []
         if cfg.emit_selfplay_visits:
             visits = mcts.root_visits(board)
@@ -113,6 +115,20 @@ def play_one_game(
         if not board.is_legal(mv):
             break
         uci = move_to_uci(mv)
+
+        # Stockfish Critic: ask SF what it would play with the same time budget,
+        # then emit a supervised example regardless of whether moves agree.
+        if (
+            cfg.stockfish_critic_enabled
+            and stockfish is not None
+            and event_sink is not None
+        ):
+            try:
+                _sf_mv, sf_idx = stockfish.choose_move_with_idx(board, think_ms)
+                event_sink.put(("sf_critic", list(state_enc), sf_idx))
+            except Exception:
+                pass
+
         move_evt = MovePlayed(
             fen=fen,
             uci=uci,
@@ -124,7 +140,7 @@ def play_one_game(
         if event_sink is not None:
             event_sink.put(("move_played", move_evt))
         moves_uci.append(uci)
-        trajectory.append((core.encode(board), list(pi), board.side_to_move()))
+        trajectory.append((state_enc, list(pi), board.side_to_move()))
         board.make_move(mv)
         mcts.advance_root(idx)
 

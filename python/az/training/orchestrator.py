@@ -19,6 +19,7 @@ from az.training.central_learner import CentralLearner
 from az.training.inference_server import InferenceServer
 from az.training.replay_buffer import ReplayBuffer
 from az.training.selfplay_worker import ParallelSelfPlayPool
+from az.training.stockfish_critic import StockfishCriticBuffer
 from az.training.stockfish_paths import stockfish_path_error
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,10 @@ class TrainerOrchestrator(QObject):
             cfg.policy_size,
         )
         self.ckpt = CheckpointManager(self.cfg.run_dir)
+        self.critic_buffer = StockfishCriticBuffer(
+            cfg.stockfish_critic_capacity,
+            cfg.encoding_channels * 64,
+        )
         self.inference: InferenceServer | None = None
         self.learner: CentralLearner | None = None
         self.selfplay: ParallelSelfPlayPool | None = None
@@ -88,7 +93,8 @@ class TrainerOrchestrator(QObject):
         load_brain(self.model, device="cpu")
         # SGD must run on the Qt GUI thread (see _run_learner_steps).
         self.learner = CentralLearner(
-            self.model, self.buffer, self.cfg, self.stop_event, self._model_lock
+            self.model, self.buffer, self.cfg, self.stop_event, self._model_lock,
+            critic_buffer=self.critic_buffer,
         )
 
     def start(self) -> None:
@@ -266,6 +272,9 @@ class TrainerOrchestrator(QObject):
             elif kind == "game_finished":
                 self._visit_buffer.clear()
                 self.game_finished.emit(payload[0])
+            elif kind == "sf_critic":
+                # payload: [state_list, sf_move_idx]
+                self.critic_buffer.add(payload[0], payload[1])
         return count
 
     @property

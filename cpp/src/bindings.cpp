@@ -125,7 +125,7 @@ PYBIND11_MODULE(_az_core, m) {
   py::class_<az::MCTS>(m, "MCTS")
       .def(py::init<az::InferenceQueue*, const az::MCTSConfig&>())
       .def("run", &az::MCTS::run, py::arg("board"), py::arg("temperature") = 1.0f,
-           py::call_guard<py::gil_scoped_release>())
+           py::arg("think_time_ms") = 0, py::call_guard<py::gil_scoped_release>())
       .def("advance_root", &az::MCTS::advance_root, py::arg("move_index"),
            py::call_guard<py::gil_scoped_release>())
       .def("reset_tree", &az::MCTS::reset_tree, py::call_guard<py::gil_scoped_release>())

@@ -5,12 +5,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch
+import torch.nn.functional as F
 import torch.optim as optim
 
 from az.config import Config
 from az.ipc.events import TrainStep
 from az.network.resnet import AlphaZeroResNet, az_loss
 from az.training.replay_buffer import ReplayBuffer
+from az.training.stockfish_critic import StockfishCriticBuffer
 
 try:
     from PyQt6.QtCore import QObject, pyqtSignal
@@ -31,12 +33,14 @@ class CentralLearner(QObject):
         cfg: Config,
         stop_event: threading.Event,
         model_lock: threading.Lock | None = None,
+        critic_buffer: StockfishCriticBuffer | None = None,
     ):
         super().__init__()
         self.model = model
         self.buffer = buffer
         self.cfg = cfg
         self.stop_event = stop_event
+        self.critic_buffer = critic_buffer
         self.device = torch.device(
             cfg.device if torch.cuda.is_available() and cfg.device.startswith("cuda") else "cpu"
         )
@@ -76,6 +80,23 @@ class CentralLearner(QObject):
                 grads.append(torch.zeros_like(p))
         return grads
 
+    def _compute_critic_grads(
+        self,
+        states: torch.Tensor,
+        sf_move_indices: torch.Tensor,
+        model: AlphaZeroResNet,
+    ) -> list[torch.Tensor]:
+        """Cross-entropy loss: push the policy head toward Stockfish's preferred move."""
+        model.zero_grad(set_to_none=True)
+        logits, _ = model(states)
+        loss = F.cross_entropy(logits, sf_move_indices) * self.cfg.stockfish_critic_weight
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        grads = []
+        for p in model.parameters():
+            grads.append(p.grad.detach().clone() if p.grad is not None else torch.zeros_like(p))
+        return grads, float(loss.item())
+
     def _average_grads(self, grad_lists: list[list[torch.Tensor]]) -> list[torch.Tensor]:
         if not grad_lists:
             return []
@@ -86,7 +107,9 @@ class CentralLearner(QObject):
                 avg[i] += g / n
         return avg
 
-    def _apply_grads(self, grads: list[torch.Tensor]) -> TrainStep:
+    def _apply_grads(
+        self, grads: list[torch.Tensor], critic_loss: float = 0.0
+    ) -> TrainStep:
         import az._az_core as core
 
         self.optimizer.zero_grad(set_to_none=True)
@@ -116,6 +139,7 @@ class CentralLearner(QObject):
             value_loss=float(vl.item()),
             total_loss=float(total.item()),
             lr=lr,
+            critic_loss=critic_loss,
         )
         self.train_step.emit(step)
         return step
@@ -176,7 +200,32 @@ class CentralLearner(QObject):
                 if not grad_lists:
                     continue
                 avg_grads = self._average_grads(grad_lists)
-                results.append(self._apply_grads(avg_grads))
+
+                # Mix in Stockfish Critic gradients when available.
+                critic_loss_val = 0.0
+                if (
+                    self.critic_buffer is not None
+                    and len(self.critic_buffer) >= self.cfg.batch_size
+                ):
+                    try:
+                        cr_states, cr_indices = self.critic_buffer.sample(sub_batch)
+                        b = cr_states.shape[0]
+                        cx = (
+                            torch.from_numpy(cr_states)
+                            .view(b, core.ENCODING_CHANNELS, 8, 8)
+                            .to(self.device)
+                        )
+                        ci = torch.from_numpy(cr_indices).long().to(self.device)
+                        local_critic = copy.deepcopy(self.model)
+                        local_critic.to(self.device)
+                        local_critic.train()
+                        cg, critic_loss_val = self._compute_critic_grads(cx, ci, local_critic)
+                        for i, g in enumerate(cg):
+                            avg_grads[i] = avg_grads[i] + g
+                    except Exception:
+                        pass
+
+                results.append(self._apply_grads(avg_grads, critic_loss_val))
 
         return results
 

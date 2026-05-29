@@ -3,6 +3,7 @@
 #include "az/encoding.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <numeric>
 
@@ -81,12 +82,24 @@ void MCTS::advance_root(int move_index) {
 
 void MCTS::reset_tree() { root_.reset(); }
 
-std::vector<float> MCTS::run(Board& board, float temperature) {
+std::vector<float> MCTS::run(Board& board, float temperature, int think_time_ms) {
   if (!root_) {
     root_ = std::make_shared<MCTSNode>();
   }
 
-  for (int sim = 0; sim < cfg_.num_simulations; ++sim) {
+  const auto deadline = think_time_ms > 0
+                            ? std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(think_time_ms)
+                            : std::chrono::steady_clock::time_point::max();
+
+  for (int sim = 0;; ++sim) {
+    if (sim > 0) {
+      if (think_time_ms > 0) {
+        if (std::chrono::steady_clock::now() >= deadline) break;
+      } else if (sim >= cfg_.num_simulations) {
+        break;
+      }
+    }
     Board sim_board = board;
     auto node = root_;
     std::vector<std::pair<std::shared_ptr<MCTSNode>, int>> path;

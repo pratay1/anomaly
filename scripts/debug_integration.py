@@ -35,7 +35,6 @@ def agent_log(msg: str, data: dict, hypothesis_id: str) -> None:
 
 def main() -> int:
     cfg = Config()
-    cfg.num_simulations = 5
     cfg.max_batch = 8
     cfg.max_wait_us = 3000
     queue = core.InferenceQueue()
@@ -46,10 +45,12 @@ def main() -> int:
     agent_log("inference_server_started", {}, "H1")
 
     board = core.Board()
-    mcts = core.MCTS(queue, cfg.to_mcts_config())
+    mcts_cfg = cfg.to_mcts_config()
+    mcts_cfg.num_simulations = 5
+    mcts = core.MCTS(queue, mcts_cfg)
     agent_log("mcts_run_begin", {}, "H1")
     t0 = time.time()
-    pi = mcts.run(board, 1.0)
+    pi = mcts.run(board, 1.0, 0)
     elapsed = time.time() - t0
     agent_log(
         "mcts_run_done",
