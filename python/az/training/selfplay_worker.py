@@ -10,8 +10,9 @@ import az._az_core as core
 import az.core_compat  # noqa: F401 — patch stale _az_core after merges
 from az.config import Config
 from az.ipc.events import GameFinished, MovePlayed
+from az.search import create_search
 from az.training.replay_buffer import ReplayBuffer
-from az.training.stockfish import StockfishEngine
+from az.training.stockfish import StockfishEngine, get_thread_stockfish
 from az.training.stockfish_paths import stockfish_path_error
 
 try:
@@ -52,14 +53,16 @@ def play_one_game(
 ) -> list:
     """Play one self-play game. Events go to event_sink (thread-safe), not Qt signals."""
     rng = rng or random.Random()
-    mcts_cfg = cfg.to_mcts_config()
     board = core.Board()
-    mcts = core.MCTS(queue_inf, mcts_cfg)
+    sf_engine = stockfish
+    if sf_engine is None and cfg.search_engine == "stockfish":
+        sf_engine = get_thread_stockfish(cfg)
+    search = create_search(cfg, queue_inf, sf_engine)
     trajectory: list[tuple] = []
     moves_uci: list[str] = []
-    use_stockfish = cfg.training_opponent == "stockfish" and stockfish is not None
-    mcts_color = core.Color.White if game_seq % 2 == 0 else core.Color.Black
-    mcts_ply = 0
+    use_stockfish_opponent = cfg.training_opponent == "stockfish" and sf_engine is not None
+    agent_color = core.Color.White if game_seq % 2 == 0 else core.Color.Black
+    agent_ply = 0
 
     for ply in range(cfg.max_game_length):
         if stop_event.is_set():
@@ -69,9 +72,9 @@ def play_one_game(
             break
 
         side = board.side_to_move()
-        if use_stockfish and side != mcts_color:
-            assert stockfish is not None
-            mv = stockfish.choose_move(board)
+        if use_stockfish_opponent and side != agent_color:
+            assert sf_engine is not None
+            mv = sf_engine.choose_move(board)
             uci = move_to_uci(mv)
             move_evt = MovePlayed(
                 fen=board.fen(),
@@ -85,20 +88,22 @@ def play_one_game(
                 event_sink.put(("move_played", move_evt))
             moves_uci.append(uci)
             board.make_move(mv)
-            mcts = core.MCTS(queue_inf, mcts_cfg)
             continue
 
-        temp = 1.0 if mcts_ply < cfg.temperature_moves else 0.1
-        mcts_ply += 1
+        temp = 1.0 if agent_ply < cfg.temperature_moves else 0.1
+        agent_ply += 1
         think_ms = cfg.random_think_time_ms(rng)
-        pi = mcts.run(board, temp, think_ms)
+        pi = search.run(board, temp, think_ms)
         fen = board.fen()
         state_enc = core.encode(board)
         visit_dicts: list[dict] = []
         if cfg.emit_selfplay_visits:
-            visits = mcts.root_visits(board)
+            visits = search.root_visits(board)
             visit_dicts = [
-                {"move_index": v.move_index, "N": v.N, "Q": v.Q, "P": v.P} for v in visits
+                {"move_index": v["move_index"], "N": v["N"], "Q": v["Q"], "P": v["P"]}
+                if isinstance(v, dict)
+                else {"move_index": v.move_index, "N": v.N, "Q": v.Q, "P": v.P}
+                for v in visits
             ]
             if event_sink is not None and visit_dicts:
                 event_sink.put(("mcts_visits", fen, visit_dicts))
@@ -116,15 +121,15 @@ def play_one_game(
             break
         uci = move_to_uci(mv)
 
-        # Stockfish Critic: ask SF what it would play with the same time budget,
-        # then emit a supervised example regardless of whether moves agree.
+        # Stockfish Critic: only when using legacy MCTS search (SF search is already the teacher).
         if (
-            cfg.stockfish_critic_enabled
-            and stockfish is not None
+            cfg.search_engine == "mcts"
+            and cfg.stockfish_critic_enabled
+            and sf_engine is not None
             and event_sink is not None
         ):
             try:
-                _sf_mv, sf_idx = stockfish.choose_move_with_idx(board, think_ms)
+                _sf_mv, sf_idx = sf_engine.choose_move_with_idx(board, think_ms)
                 event_sink.put(("sf_critic", list(state_enc), sf_idx))
             except Exception:
                 pass
@@ -142,7 +147,7 @@ def play_one_game(
         moves_uci.append(uci)
         trajectory.append((state_enc, list(pi), board.side_to_move()))
         board.make_move(mv)
-        mcts.advance_root(idx)
+        search.advance_root(idx)
 
     res = board.result()
     if res == core.GameResult.Ongoing:
@@ -256,6 +261,12 @@ class ParallelSelfPlayPool:
             self._game_seq += 1
             return seq
 
+    def _needs_stockfish(self) -> bool:
+        return (
+            self.cfg.training_opponent == "stockfish"
+            or self.cfg.search_engine == "stockfish"
+        )
+
     def _close_stockfish(self) -> None:
         with self._stockfish_lock:
             if self._stockfish is not None:
@@ -273,12 +284,12 @@ class ParallelSelfPlayPool:
         if self.cfg.training_opponent == opponent:
             return
         self.cfg.training_opponent = opponent
-        if opponent != "stockfish":
+        if opponent != "stockfish" and self.cfg.search_engine != "stockfish":
             self._close_stockfish()
 
     def _stockfish_engine(self) -> StockfishEngine:
-        if self.cfg.training_opponent != "stockfish":
-            raise RuntimeError("Stockfish engine requested outside Stockfish training mode")
+        if not self._needs_stockfish():
+            raise RuntimeError("Stockfish engine requested but neither search nor opponent uses it")
         err = stockfish_path_error(self.cfg.stockfish_path)
         if err:
             raise FileNotFoundError(err)

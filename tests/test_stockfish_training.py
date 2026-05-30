@@ -14,6 +14,7 @@ from az.training.stockfish_paths import resolve_stockfish_path, stockfish_path_e
 
 def test_play_one_game_stockfish_only_records_mcts_plies():
     cfg = Config()
+    cfg.search_engine = "mcts"
     cfg.training_opponent = "stockfish"
     cfg.max_game_length = 4
     cfg.temperature_moves = 0
@@ -36,11 +37,11 @@ def test_play_one_game_stockfish_only_records_mcts_plies():
 
     stockfish.choose_move.side_effect = fake_choose
 
-    with patch("az.training.selfplay_worker.core.MCTS") as mock_mcts_cls:
-        mock_mcts = MagicMock()
-        mock_mcts.run.return_value = [0.0] * cfg.policy_size
-        mock_mcts.root_visits.return_value = []
-        mock_mcts_cls.return_value = mock_mcts
+    with patch("az.training.selfplay_worker.create_search") as mock_search_factory:
+        mock_search = MagicMock()
+        mock_search.run.return_value = [0.0] * cfg.policy_size
+        mock_search.root_visits.return_value = []
+        mock_search_factory.return_value = mock_search
 
         examples = play_one_game(
             queue_inf,
@@ -60,6 +61,7 @@ def test_play_one_game_stockfish_only_records_mcts_plies():
 
 def test_game_seq_alternates_mcts_color():
     cfg = Config()
+    cfg.search_engine = "mcts"
     cfg.training_opponent = "stockfish"
     stop = threading.Event()
     queue_inf = core.InferenceQueue()
@@ -81,11 +83,11 @@ def test_game_seq_alternates_mcts_color():
 
     stockfish.choose_move.side_effect = fake_stockfish_move
 
-    with patch("az.training.selfplay_worker.core.MCTS") as mock_mcts_cls:
-        mock_mcts = MagicMock()
-        mock_mcts.run.side_effect = fake_run
-        mock_mcts.root_visits.return_value = []
-        mock_mcts_cls.return_value = mock_mcts
+    with patch("az.training.selfplay_worker.create_search") as mock_search_factory:
+        mock_search = MagicMock()
+        mock_search.run.side_effect = fake_run
+        mock_search.root_visits.return_value = []
+        mock_search_factory.return_value = mock_search
 
         cfg.max_game_length = 1
         play_one_game(
@@ -151,6 +153,7 @@ def test_stockfish_mode_publishes_live_events_to_outbound_queue():
 
 def test_set_training_opponent_closes_stockfish_engine():
     cfg = Config()
+    cfg.search_engine = "mcts"
     cfg.training_opponent = "stockfish"
     stop = threading.Event()
     queue_inf = core.InferenceQueue()

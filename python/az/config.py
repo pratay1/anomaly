@@ -13,7 +13,9 @@ class Config:
     policy_size: int = 4672
     encoding_channels: int = 119
 
-    # MCTS — time budget per move (random between min and max each ply)
+    # Search — Stockfish UCI (default) or legacy MCTS+net
+    search_engine: str = "stockfish"  # "stockfish" or "mcts"
+    # Time budget per move (random between min and max each ply)
     mcts_think_time_ms_min: int = 500
     mcts_think_time_ms_max: int = 1000
     c_puct_base: float = 19652.0
@@ -26,7 +28,7 @@ class Config:
     num_workers: int = 2
     games_per_iteration: int = 4
     max_game_length: int = 256
-    training_opponent: str = "self"  # "self" or "stockfish"
+    training_opponent: str = "stockfish"  # "self" or "stockfish"
     stockfish_path: Path = field(
         default_factory=lambda: Path(r"C:\Users\prata\stockfish\stockfish.exe")
     )
@@ -62,9 +64,8 @@ class Config:
     board_anim_ms: int = 160
     mcts_reveal_ms: int = 400  # GUI: show search heatmap before applying the move
 
-    # Stockfish Critic — supervised imitation signal from SF during Anomaly's turns
-    # Enabled automatically when SF is available; set False to disable.
-    stockfish_critic_enabled: bool = True
+    # Stockfish Critic — extra imitation signal when search_engine is "mcts"
+    stockfish_critic_enabled: bool = False
     # Weight applied to the critic cross-entropy loss relative to self-play loss.
     stockfish_critic_weight: float = 0.3
     # Capacity of the critic ring buffer (independent from the self-play buffer).

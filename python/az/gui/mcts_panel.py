@@ -86,7 +86,7 @@ class _MoveCard(QFrame):
 
 class MCTSPanel(QGroupBox):
     def __init__(self, board_view: BoardView, parent=None):
-        super().__init__("MCTS", parent)
+        super().__init__("Search", parent)
         self.setObjectName("mcts_panel")
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(_PANEL_HEIGHT)

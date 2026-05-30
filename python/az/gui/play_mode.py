@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 import threading
 from pathlib import Path
 
@@ -15,8 +14,10 @@ from az.config import Config
 from az.gui.board_view import BoardView
 from az.gui.piece_assets import PieceAssetManager
 from az.network.resnet import AlphaZeroResNet
+from az.search import create_search
 from az.training.inference_server import InferenceServer
 from az.training.selfplay_worker import move_to_uci
+from az.training.stockfish import StockfishEngine
 
 
 class PlayVsNetDialog(QDialog):
@@ -53,8 +54,13 @@ class PlayVsNetDialog(QDialog):
 
         self.queue = core.InferenceQueue()
         self.stop = threading.Event()
-        self.inference = InferenceServer(self.queue, self.model, self.cfg, self.stop)
-        self.inference.start()
+        self.inference = None
+        self.stockfish: StockfishEngine | None = None
+        if self.cfg.search_engine == "mcts":
+            self.inference = InferenceServer(self.queue, self.model, self.cfg, self.stop)
+            self.inference.start()
+        else:
+            self.stockfish = StockfishEngine(self.cfg)
 
         self.ch = chess.Board()
         self.cpp_board = core.Board()
@@ -171,7 +177,7 @@ class PlayVsNetDialog(QDialog):
         self.board_view.set_last_move(move.from_square, move.to_square)
         self._human_turn = False
         self._selected_sq = None
-        self.status_label.setText("AlphaZero thinking…")
+        self.status_label.setText("Anomaly thinking…")
         self.board_view.set_thinking(True)
         QTimer.singleShot(50, self._engine_move)
 
@@ -182,9 +188,9 @@ class PlayVsNetDialog(QDialog):
             return
         self._engine_thinking = True
         try:
-            mcts = core.MCTS(self.queue, self.cfg.to_mcts_config())
+            search = create_search(self.cfg, self.queue, self.stockfish)
             think_ms = self.cfg.random_think_time_ms()
-            pi = mcts.run(self.cpp_board, 0.1, think_ms)
+            pi = search.run(self.cpp_board, 0.1, think_ms)
             legal = core.legal_move_indices(self.cpp_board)
             if not legal:
                 self._engine_thinking = False
@@ -248,5 +254,8 @@ class PlayVsNetDialog(QDialog):
 
     def closeEvent(self, event):
         self.stop.set()
-        self.inference.join(timeout=2)
+        if self.inference is not None:
+            self.inference.join(timeout=2)
+        if self.stockfish is not None:
+            self.stockfish.close()
         super().closeEvent(event)

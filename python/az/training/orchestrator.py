@@ -222,7 +222,7 @@ class TrainerOrchestrator(QObject):
         msg = f"{type(exc).__name__}: {exc}"
         logger.warning("training failure (continuing): %s", msg, exc_info=exc)
         self.training_error.emit(msg)
-        if self.cfg.training_opponent == "stockfish":
+        if self.cfg.training_opponent == "stockfish" or self.cfg.search_engine == "stockfish":
             self.restart_stockfish()
 
     def restart_stockfish(self) -> None:

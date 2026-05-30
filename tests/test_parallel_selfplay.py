@@ -14,6 +14,7 @@ from az.training.selfplay_worker import ParallelSelfPlayPool
 
 def test_parallel_iteration_waits_for_all():
     cfg = Config()
+    cfg.training_opponent = "self"
     cfg.num_workers = 3
     stop = threading.Event()
     queue = core.InferenceQueue()
