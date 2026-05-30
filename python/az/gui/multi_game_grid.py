@@ -132,3 +132,7 @@ class MultiGameGridDialog(QDialog):
 
     def get_state(self, game_id: int) -> GameState | None:
         return self._states.get(game_id)
+
+    def update_board_fen(self, game_id: int, fen: str) -> None:
+        if game_id in self._boards:
+            self._boards[game_id].set_fen(fen)

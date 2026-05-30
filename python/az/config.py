@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+def _default_stockfish_path() -> Path:
+    from az.training.stockfish_paths import resolve_stockfish_path
+    return resolve_stockfish_path()
+
+
 @dataclass
 class Config:
     # Network (lighter defaults — less VRAM/RAM pressure on consumer GPUs)
@@ -29,9 +34,7 @@ class Config:
     games_per_iteration: int = 4
     max_game_length: int = 256
     training_opponent: str = "stockfish"  # "self" or "stockfish"
-    stockfish_path: Path = field(
-        default_factory=lambda: Path(r"C:\Users\prata\stockfish\stockfish.exe")
-    )
+    stockfish_path: Path = field(default_factory=_default_stockfish_path)
     stockfish_movetime_ms: int = 50
 
     # Training
@@ -65,7 +68,7 @@ class Config:
     mcts_reveal_ms: int = 400  # GUI: show search heatmap before applying the move
 
     # Stockfish Critic — extra imitation signal when search_engine is "mcts"
-    stockfish_critic_enabled: bool = False
+    stockfish_critic_enabled: bool = True
     # Weight applied to the critic cross-entropy loss relative to self-play loss.
     stockfish_critic_weight: float = 0.3
     # Capacity of the critic ring buffer (independent from the self-play buffer).

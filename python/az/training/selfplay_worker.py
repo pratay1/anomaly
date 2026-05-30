@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import queue
 import random
 import threading
@@ -14,6 +15,8 @@ from az.search import create_search
 from az.training.replay_buffer import ReplayBuffer
 from az.training.stockfish import StockfishEngine, get_thread_stockfish
 from az.training.stockfish_paths import stockfish_path_error
+
+log = logging.getLogger(__name__)
 
 try:
     from PyQt6.QtCore import QObject, pyqtSignal
@@ -118,6 +121,7 @@ def play_one_game(
 
         mv = core.index_to_move(board, idx)
         if not board.is_legal(mv):
+            log.warning("Illegal move index %d generated; aborting game %d", idx, game_id)
             break
         uci = move_to_uci(mv)
 

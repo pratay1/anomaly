@@ -356,8 +356,7 @@ class MainWindow(QMainWindow):
             self._grid_dialog.solo_requested.connect(self._open_solo_game)
             self._grid_dialog.finished.connect(self._on_grid_closed)
         for gid, st in self._game_states.items():
-            if gid in self._grid_dialog._boards:
-                self._grid_dialog._boards[gid].set_fen(st.fen)
+            self._grid_dialog.update_board_fen(gid, st.fen)
         self._grid_dialog.show()
         self._grid_dialog.raise_()
         self._grid_dialog.activateWindow()

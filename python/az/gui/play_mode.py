@@ -61,6 +61,7 @@ class PlayVsNetDialog(QDialog):
             self.inference.start()
         else:
             self.stockfish = StockfishEngine(self.cfg)
+        self._search = create_search(self.cfg, self.queue, self.stockfish)
 
         self.ch = chess.Board()
         self.cpp_board = core.Board()
@@ -188,9 +189,8 @@ class PlayVsNetDialog(QDialog):
             return
         self._engine_thinking = True
         try:
-            search = create_search(self.cfg, self.queue, self.stockfish)
             think_ms = self.cfg.random_think_time_ms()
-            pi = search.run(self.cpp_board, 0.1, think_ms)
+            pi = self._search.run(self.cpp_board, 0.1, think_ms)
             legal = core.legal_move_indices(self.cpp_board)
             if not legal:
                 self._engine_thinking = False

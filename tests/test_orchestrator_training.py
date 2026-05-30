@@ -3,6 +3,14 @@ from __future__ import annotations
 import threading
 
 import pytest
+
+try:
+    from PyQt6.QtWidgets import QApplication  # noqa: F401
+
+    HAS_PYQT6 = True
+except ImportError:
+    HAS_PYQT6 = False
+
 from az.config import Config
 from az.training.orchestrator import TrainerOrchestrator
 
@@ -23,10 +31,7 @@ def test_run_learner_steps_without_qt_calls_in_place():
     assert called.is_set()
 
 
-@pytest.mark.skipif(
-    not pytest.importorskip("PyQt6.QtWidgets", reason="PyQt6 required"),
-    reason="PyQt6",
-)
+@pytest.mark.skipif(not HAS_PYQT6, reason="PyQt6 required")
 def test_run_learner_steps_dispatches_to_gui_thread(qtbot):
     from PyQt6.QtCore import QCoreApplication, QThread
     from PyQt6.QtWidgets import QApplication
