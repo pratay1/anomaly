@@ -31,6 +31,7 @@ class GameFinished:
     examples_count: int
     game_id: int = 0
     moves_uci: list[str] = field(default_factory=list)
+    agent_score: float = 0.5  # 1=win, 0.5=draw, 0=loss from agent (or white) POV
 
 
 @dataclass

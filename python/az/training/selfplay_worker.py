@@ -175,12 +175,25 @@ def play_one_game(
         elif examples[-1].value < 0:
             result = "0-1" if res == core.GameResult.BlackWin else "1-0"
 
+    if res == core.GameResult.Draw:
+        agent_score = 0.5
+    elif use_stockfish_opponent:
+        if res == core.GameResult.WhiteWin:
+            agent_score = 1.0 if agent_color == core.Color.White else 0.0
+        else:
+            agent_score = 1.0 if agent_color == core.Color.Black else 0.0
+    elif res == core.GameResult.WhiteWin:
+        agent_score = 1.0
+    else:
+        agent_score = 0.0
+
     finished = GameFinished(
         result=result,
         plies=len(examples),
         examples_count=len(examples),
         game_id=game_id,
         moves_uci=moves_uci,
+        agent_score=agent_score,
     )
     if event_sink is not None:
         event_sink.put(("game_finished", finished))

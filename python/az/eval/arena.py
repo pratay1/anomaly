@@ -37,6 +37,8 @@ def evaluate_vs_random(
     model: AlphaZeroResNet,
     queue: core.InferenceQueue,
     num_games: int = 10,
+    *,
+    start_inference: bool = True,
 ) -> float:
     """Fraction of games won by the search engine (playing white and black alternately)."""
     import threading
@@ -48,10 +50,11 @@ def evaluate_vs_random(
     stockfish: StockfishEngine | None = None
     inf = None
     if cfg.search_engine == "mcts":
-        mcts_cfg = cfg.to_mcts_config()
-        mcts_cfg.add_root_noise = False
-        inf = InferenceServer(queue, model, cfg, stop)
-        inf.start()
+        if start_inference:
+            mcts_cfg = cfg.to_mcts_config()
+            mcts_cfg.add_root_noise = False
+            inf = InferenceServer(queue, model, cfg, stop)
+            inf.start()
     else:
         stockfish = StockfishEngine(cfg)
     wins = 0.0

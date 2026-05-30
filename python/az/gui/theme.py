@@ -19,9 +19,41 @@ TEXT_DISABLED = "#606060"
 ACCENT_SOFT = "#8a8a8a"
 ACCENT_MID = "#6a6a6a"
 ACCENT_DIM = "#4a4a4a"
-HEAT_LOW = "#181818"
-HEAT_MID = "#3a3a3a"
-HEAT_HIGH = "#7a7a7a"
+# Search heatmap: rank 0 = best move (lightest grey) … rank 4 = 5th (darkest, still visible)
+HEAT_RANK_RGBA: tuple[tuple[int, int, int, int], ...] = (
+    (184, 184, 184, 160),
+    (152, 152, 152, 155),
+    (128, 128, 128, 150),
+    (104, 104, 104, 145),
+    (85, 85, 85, 140),
+)
+
+
+def ranked_heatmap_from_visits(fen: str, visits: list) -> dict[int, int]:
+    """Map square index → rank shade (0=lightest/best … 4=darkest/5th)."""
+    if not visits:
+        return {}
+    sorted_v = sorted(
+        visits,
+        key=lambda v: v.get("N", getattr(v, "N", 0)),
+        reverse=True,
+    )[:5]
+    heat: dict[int, int] = {}
+    try:
+        import az._az_core as core
+
+        board = core.Board.from_fen(fen)
+        for rank, v in enumerate(sorted_v):
+            idx = v.get("move_index", getattr(v, "move_index", -1))
+            if idx < 0:
+                continue
+            mv = core.index_to_move(board, idx)
+            for sq in (mv.from_sq, mv.to_sq):
+                if sq not in heat or rank < heat[sq]:
+                    heat[sq] = rank
+    except Exception:
+        pass
+    return heat
 THINKING_GLOW = "#505050"
 
 # Chess board (refined monochrome checker — better contrast, warmer charcoals)

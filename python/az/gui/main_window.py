@@ -250,9 +250,9 @@ class MainWindow(QMainWindow):
             self._grid_dialog.on_game_finished(game)
         for dlg in self._solo_dialogs.values():
             dlg.on_game_finished(game)
+        self.metrics.on_game_finished(game.agent_score)
         if gid == self._focused_game_id:
             self.games_panel.add_game(game)
-            self.metrics.on_game_finished()
             self._ply_token += 1
             token = self._ply_token
             final_fen = self._game_states[gid].fen if gid in self._game_states else chess.STARTING_FEN

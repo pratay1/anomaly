@@ -12,7 +12,7 @@ import az._az_core as core
 from az.brain import align_cfg_with_brain, load_brain, save_brain
 from az.checkpoint import CheckpointManager
 from az.config import Config
-from az.eval.arena import play_random_vs_random
+from az.eval.arena import evaluate_vs_random
 from az.ipc.events import ArenaResult, CheckpointSaved, IterationComplete
 from az.network.resnet import AlphaZeroResNet
 from az.training.central_learner import CentralLearner
@@ -207,14 +207,20 @@ class TrainerOrchestrator(QObject):
         )
         if step > 0 and step % self.cfg.arena_every_steps == 0:
             try:
-                wins, draws, losses = play_random_vs_random(self.cfg.arena_num_games)
+                with self._model_lock:
+                    self.model.eval()
+                    wr = evaluate_vs_random(
+                        self.cfg,
+                        self.model,
+                        self.queue,
+                        self.cfg.arena_num_games,
+                        start_inference=False,
+                    )
             except Exception as exc:
                 self._handle_training_failure(exc)
                 return
-            total = max(wins + draws + losses, 1)
-            wr = wins / total
             self.arena_result.emit(
-                ArenaResult(win_rate=wr, draws=draws, wins=wins, losses=losses)
+                ArenaResult(win_rate=wr, draws=0, wins=0, losses=0)
             )
         time.sleep(0.01)
 

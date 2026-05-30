@@ -18,11 +18,10 @@ from az.gui.piece_assets import PieceAssetManager
 from az.gui.theme import (
     COORD_TEXT,
     DARK_SQUARE,
-    HEAT_HIGH,
-    HEAT_LOW,
-    HEAT_MID,
+    HEAT_RANK_RGBA,
     LIGHT_SQUARE,
     THINKING_GLOW,
+    ranked_heatmap_from_visits,
 )
 
 
@@ -165,34 +164,20 @@ class BoardView(QGraphicsView):
             t.setZValue(15)
             self._scene().addItem(t)
 
-    def _heat_color(self, alpha: float) -> QColor:
-        t = min(1.0, max(0.0, alpha))
-        low, mid, high = QColor(HEAT_LOW), QColor(HEAT_MID), QColor(HEAT_HIGH)
-        if t < 0.5:
-            u = t * 2
-            c = QColor(
-                int(low.red() + (mid.red() - low.red()) * u),
-                int(low.green() + (mid.green() - low.green()) * u),
-                int(low.blue() + (mid.blue() - low.blue()) * u),
-            )
-        else:
-            u = (t - 0.5) * 2
-            c = QColor(
-                int(mid.red() + (high.red() - mid.red()) * u),
-                int(mid.green() + (high.green() - mid.green()) * u),
-                int(mid.blue() + (high.blue() - mid.blue()) * u),
-            )
-        c.setAlpha(int(60 + 150 * t))
+    def _heat_color_for_rank(self, rank: int) -> QColor:
+        r, g, b, a = HEAT_RANK_RGBA[min(max(rank, 0), 4)]
+        c = QColor(r, g, b)
+        c.setAlpha(a)
         return c
 
     def clear_heatmap(self) -> None:
         self.set_heatmap({})
 
-    def set_heatmap(self, visits: dict[int, float]) -> None:
+    def set_heatmap(self, ranks: dict[int, int]) -> None:
         for sq, overlay in self._heat_overlays.items():
-            alpha = visits.get(sq, 0.0)
-            if alpha > 0:
-                overlay.setBrush(QBrush(self._heat_color(alpha)))
+            rank = ranks.get(sq)
+            if rank is not None:
+                overlay.setBrush(QBrush(self._heat_color_for_rank(rank)))
                 overlay.setVisible(True)
             else:
                 overlay.setVisible(False)
@@ -201,23 +186,7 @@ class BoardView(QGraphicsView):
         if not visits:
             self.clear_heatmap()
             return
-        heat: dict[int, float] = {}
-        max_n = max((v.get("N", getattr(v, "N", 0)) for v in visits)) or 1
-        try:
-            import az._az_core as core
-
-            board = core.Board.from_fen(fen)
-            for v in visits:
-                n = v.get("N", getattr(v, "N", 0))
-                idx = v.get("move_index", getattr(v, "move_index", -1))
-                if idx < 0:
-                    continue
-                mv = core.index_to_move(board, idx)
-                heat[mv.from_sq] = max(heat.get(mv.from_sq, 0), n / max_n)
-                heat[mv.to_sq] = max(heat.get(mv.to_sq, 0), n / max_n)
-        except Exception:
-            pass
-        self.set_heatmap(heat)
+        self.set_heatmap(ranked_heatmap_from_visits(fen, visits))
 
     def clear_last_move(self) -> None:
         pass
