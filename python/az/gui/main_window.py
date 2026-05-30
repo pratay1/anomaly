@@ -422,4 +422,6 @@ class MainWindow(QMainWindow):
         if self.trainer_thread:
             self.trainer_thread.requestInterruption()
             self.trainer_thread.wait(5000)
+        from az.keepalive import allow_sleep
+        allow_sleep()
         super().closeEvent(event)

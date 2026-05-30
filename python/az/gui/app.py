@@ -11,10 +11,12 @@ from PyQt6.QtWidgets import QApplication
 
 from az.config import Config
 from az.gui.main_window import MainWindow
+from az.keepalive import activate_keepalive
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv or sys.argv
+    activate_keepalive()
     app = QApplication(argv)
     cfg = Config()
     win = MainWindow(cfg)

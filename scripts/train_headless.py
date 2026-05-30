@@ -4,10 +4,12 @@
 import time
 
 from az.config import Config
+from az.keepalive import activate_keepalive
 from az.training.orchestrator import TrainerOrchestrator
 
 
 def main():
+    activate_keepalive()
     cfg = Config()
     cfg.mcts_think_time_ms_min = 200
     cfg.mcts_think_time_ms_max = 500

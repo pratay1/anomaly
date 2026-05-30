@@ -117,7 +117,7 @@ class TrainerOrchestrator(QObject):
                     self._handle_training_failure(exc)
                     time.sleep(1.0)
 
-        t_train = threading.Thread(target=training_loop, name="TrainingLoop")
+        t_train = threading.Thread(target=training_loop, name="TrainingLoop", daemon=True)
         t_train.start()
         self._threads.append(t_train)
 
@@ -138,9 +138,34 @@ class TrainerOrchestrator(QObject):
                 except Exception as exc:
                     self._handle_training_failure(exc)
 
-        t_mon = threading.Thread(target=monitor, name="Monitor")
+        t_mon = threading.Thread(target=monitor, name="Monitor", daemon=True)
         t_mon.start()
         self._threads.append(t_mon)
+
+        def health_watchdog():
+            while not self.stop_event.is_set():
+                time.sleep(60)
+                self._check_thread_health()
+
+        t_health = threading.Thread(target=health_watchdog, name="HealthWatchdog", daemon=True)
+        t_health.start()
+        self._threads.append(t_health)
+
+    def _check_thread_health(self) -> None:
+        """Verify critical threads are alive; restart InferenceServer if it died."""
+        if self.stop_event.is_set():
+            return
+        if self.inference is not None and not self.inference.is_alive():
+            logger.warning("InferenceServer thread died — restarting")
+            try:
+                self.inference = InferenceServer(
+                    self.queue, self.model, self.cfg, self.stop_event, self._model_lock
+                )
+                self.inference.start()
+                self.training_error.emit("InferenceServer restarted (was dead)")
+            except Exception as exc:
+                logger.error("Failed to restart InferenceServer: %s", exc)
+                self.training_error.emit(f"InferenceServer restart failed: {exc}")
 
     def _run_training_iteration(self) -> None:
         assert self.selfplay is not None and self.learner is not None and self.inference is not None
