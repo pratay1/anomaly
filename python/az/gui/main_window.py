@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
             o.flush_selfplay_events()
 
     def _active_game_count(self) -> int:
-        return 1 if self.cfg.training_opponent == "stockfish" else self.cfg.num_workers
+        return self.cfg.num_workers
 
     def _reset_training_game_states(self) -> None:
         n = self._active_game_count()
@@ -470,12 +470,7 @@ class MainWindow(QMainWindow):
         mode = "Stockfish training" if enabled else "self-play"
         self.subtitle.setText(f"AlphaZero · {mode}")
         self._reset_training_game_states()
-        detail = (
-            "one serial game per iteration (no parallel self-play)"
-            if enabled
-            else "parallel self-play"
-        )
-        self.status.showMessage(f"{mode} enabled — {detail}")
+        self.status.showMessage(f"{mode} enabled — {self.cfg.num_workers} parallel workers")
 
     def _play_vs_ckpt(self) -> None:
         from az.gui.play_mode import PlayVsNetDialog

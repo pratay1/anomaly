@@ -13,7 +13,13 @@ from az.config import Config
 from az.ipc.events import GameFinished, MovePlayed
 from az.search import create_search
 from az.training.replay_buffer import ReplayBuffer
-from az.training.stockfish import StockfishEngine, get_thread_stockfish
+from az.training.stockfish import (
+    StockfishEngine,
+    get_thread_stockfish,
+)
+from az.training.stockfish import (
+    _thread_local as _thread_local_sf,
+)
 from az.training.stockfish_paths import stockfish_path_error
 
 log = logging.getLogger(__name__)
@@ -58,7 +64,9 @@ def play_one_game(
     rng = rng or random.Random()
     board = core.Board()
     sf_engine = stockfish
-    if sf_engine is None and cfg.search_engine == "stockfish":
+    if sf_engine is None and (
+        cfg.search_engine == "stockfish" or cfg.training_opponent == "stockfish"
+    ):
         sf_engine = get_thread_stockfish(cfg)
     search = create_search(cfg, queue_inf, sf_engine)
     trajectory: list[tuple] = []
@@ -326,21 +334,19 @@ class ParallelSelfPlayPool:
                 break
 
     def run_iteration(self, num_games: int | None = None) -> list:
-        """Run self-play games; Stockfish mode uses one serial game (no thread pool)."""
-        stockfish_mode = self.cfg.training_opponent == "stockfish"
-        n = 1 if stockfish_mode else (num_games if num_games is not None else self.cfg.num_workers)
+        """Run self-play (or Stockfish opponent) games in parallel.
+
+        Each worker thread gets its own StockfishEngine via get_thread_stockfish so
+        no UCI process is shared across threads.
+        """
+        n = num_games if num_games is not None else self.cfg.num_workers
         if self.stop_event.is_set():
             return []
 
-        stockfish_engine: StockfishEngine | None = None
-        if stockfish_mode:
-            stockfish_engine = self._stockfish_engine()
-
         all_examples: list = []
         event_queue: queue.Queue = queue.Queue()
-        event_sink = self.outbound_events if stockfish_mode else event_queue
 
-        def play_game(game_id: int, _engine=stockfish_engine) -> list:
+        def play_game(game_id: int) -> list:
             if self.stop_event.is_set():
                 return []
             game_seq = self._next_game_seq()
@@ -351,33 +357,31 @@ class ParallelSelfPlayPool:
                 self.stop_event,
                 game_id=game_id,
                 rng=rng,
-                event_sink=event_sink,
+                event_sink=event_queue,
                 game_seq=game_seq,
-                stockfish=_engine,
             )
 
-        if stockfish_mode:
-            for attempt in range(3):
-                try:
-                    self._drain_events(self.outbound_events)
-                    examples = play_game(0)
-                    self.buffer.add_batch(examples)
-                    all_examples.extend(examples)
-                    return all_examples
-                except Exception:
-                    self.restart_stockfish()
-                    stockfish_engine = self._stockfish_engine()
-                    if attempt == 2:
-                        raise
-            return all_examples
-
-        lock = threading.Lock()
+        buf_lock = threading.Lock()
 
         def play_game_parallel(game_id: int) -> list:
-            examples = play_game(game_id)
-            with lock:
-                self.buffer.add_batch(examples)
-            return examples
+            for attempt in range(3):
+                try:
+                    examples = play_game(game_id)
+                    with buf_lock:
+                        self.buffer.add_batch(examples)
+                    return examples
+                except Exception:
+                    if self.cfg.training_opponent == "stockfish":
+                        eng = getattr(_thread_local_sf, "engine", None)
+                        if eng is not None:
+                            try:
+                                eng.close()
+                            except Exception:
+                                pass
+                            _thread_local_sf.engine = None
+                    if attempt == 2:
+                        raise
+            return []
 
         with ThreadPoolExecutor(max_workers=n, thread_name_prefix="SelfPlay") as pool:
             futures = [pool.submit(play_game_parallel, gid) for gid in range(n)]

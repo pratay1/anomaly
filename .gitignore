@@ -35,3 +35,6 @@ debug-*.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Unnecessary files
+anomaly.json

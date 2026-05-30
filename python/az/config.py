@@ -89,8 +89,7 @@ class Config:
     brain_path: Path = field(default_factory=lambda: Path("anomaly.pt"))
 
     def games_per_selfplay_iteration(self) -> int:
-        """Stockfish mode runs one serial game per iteration for stability."""
-        return 1 if self.training_opponent == "stockfish" else self.num_workers
+        return self.num_workers
 
     def learning_rate(self, step: int) -> float:
         lr = self.lr_schedule[0][1]

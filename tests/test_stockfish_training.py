@@ -101,7 +101,7 @@ def test_game_seq_alternates_mcts_color():
     assert seen_colors == [core.Color.White, core.Color.Black]
 
 
-def test_stockfish_mode_runs_one_serial_game():
+def test_stockfish_mode_runs_parallel_games():
     cfg = Config()
     cfg.num_workers = 3
     cfg.training_opponent = "stockfish"
@@ -117,18 +117,16 @@ def test_stockfish_mode_runs_one_serial_game():
         call_count += 1
         return []
 
-    with (
-        patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play),
-        patch.object(pool, "_stockfish_engine", return_value=MagicMock()),
-    ):
+    with patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play):
         pool.run_iteration(3)
 
-    assert call_count == 1
-    assert cfg.games_per_selfplay_iteration() == 1
+    assert call_count == 3
+    assert cfg.games_per_selfplay_iteration() == 3
 
 
-def test_stockfish_mode_publishes_live_events_to_outbound_queue():
+def test_stockfish_mode_publishes_events_to_outbound_queue():
     cfg = Config()
+    cfg.num_workers = 1
     cfg.training_opponent = "stockfish"
     stop = threading.Event()
     queue_inf = core.InferenceQueue()
@@ -137,16 +135,13 @@ def test_stockfish_mode_publishes_live_events_to_outbound_queue():
     pool = ParallelSelfPlayPool(queue_inf, buf, cfg, stop, outbound)
 
     def fake_play(*args, **kwargs):
+        # Workers write to their local event_queue; the pool drains it to outbound.
         event_sink = kwargs["event_sink"]
-        assert event_sink is outbound
         event_sink.put(("move_played", "live"))
         return []
 
-    with (
-        patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play),
-        patch.object(pool, "_stockfish_engine", return_value=MagicMock()),
-    ):
-        pool.run_iteration(3)
+    with patch("az.training.selfplay_worker.play_one_game", side_effect=fake_play):
+        pool.run_iteration(1)
 
     assert outbound.get_nowait() == ("move_played", "live")
 
