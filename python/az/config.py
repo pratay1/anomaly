@@ -30,10 +30,10 @@ class Config:
     temperature_moves: int = 15
 
     # Self-play
-    num_workers: int = 2
-    games_per_iteration: int = 4
+    num_workers: int = 4
+    games_per_iteration: int = 8
     max_game_length: int = 256
-    training_opponent: str = "stockfish"  # "self" or "stockfish"
+    training_opponent: str = "self"  # "self" or "stockfish"
     stockfish_path: Path = field(default_factory=_default_stockfish_path)
     stockfish_movetime_ms: int = 50
 
@@ -64,8 +64,18 @@ class Config:
     # GUI
     live_game_fps_cap: int = 8
     metrics_window: int = 2_000
+    memory_sample_interval_ms: int = 5_000
+    memory_metrics_window: int = 360
     board_anim_ms: int = 160
     mcts_reveal_ms: int = 400  # GUI: show search heatmap before applying the move
+
+    # Seamless auto-restart (reclaim RAM; restore last settings from session file)
+    auto_restart_enabled: bool = True
+    auto_restart_interval_s: int = 3600
+    auto_restart_memory_threshold_mb: int = 2048
+    auto_restart_memory_step_mb: int = 512
+    auto_restart_min_interval_s: int = 60
+    auto_restart_check_interval_ms: int = 30_000
 
     # Stockfish Critic — extra imitation signal when search_engine is "mcts"
     stockfish_critic_enabled: bool = True

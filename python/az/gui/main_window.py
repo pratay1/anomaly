@@ -25,17 +25,26 @@ from az.gui.piece_assets import PieceAssetManager
 from az.gui.solo_game_dialog import SoloGameDialog
 from az.gui.theme import DARK_STYLESHEET
 from az.ipc.events import GameFinished, MovePlayed, TrainStep
+from az.session import save_session
 from az.training.orchestrator import TrainerOrchestratorThread
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, cfg: Config | None = None):
+    def __init__(
+        self,
+        cfg: Config | None = None,
+        *,
+        window_state: dict | None = None,
+    ):
         super().__init__()
         self.cfg = cfg or Config()
         self.cfg.emit_selfplay_visits = True
+        self._pending_restart = False
         self.setWindowTitle("Anomaly")
         self.resize(1320, 820)
         self.setMinimumSize(920, 620)
+        if window_state:
+            self._apply_window_state(window_state)
         self.setStyleSheet(DARK_STYLESHEET)
 
         central = QWidget()
@@ -99,12 +108,17 @@ class MainWindow(QMainWindow):
         right = QVBoxLayout()
         right.setSpacing(10)
         right.setContentsMargins(8, 0, 0, 0)
-        self.metrics = MetricsPanel(self.cfg.metrics_window)
+        self.metrics = MetricsPanel(
+            self.cfg.metrics_window,
+            memory_interval_ms=self.cfg.memory_sample_interval_ms,
+            memory_window=self.cfg.memory_metrics_window,
+        )
         self.games_panel = GamesPanel()
         right.addWidget(self.metrics, stretch=3)
         right.addWidget(self.games_panel, stretch=2)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter = splitter
         splitter.setHandleWidth(3)
         lw, rw = QWidget(), QWidget()
         lw.setLayout(left)
@@ -137,6 +151,59 @@ class MainWindow(QMainWindow):
         self._event_timer.timeout.connect(self._flush_trainer_events)
         self._ply_token = 0
         self._latest_post_fen = chess.STARTING_FEN
+        if window_state and "splitter_sizes" in window_state:
+            sizes = window_state["splitter_sizes"]
+            if isinstance(sizes, list) and len(sizes) == 2:
+                self._splitter.setSizes([int(s) for s in sizes])
+
+    def _apply_window_state(self, state: dict) -> None:
+        w = int(state.get("width", 0))
+        h = int(state.get("height", 0))
+        if w >= self.minimumWidth() and h >= self.minimumHeight():
+            self.resize(w, h)
+        x = state.get("x")
+        y = state.get("y")
+        if isinstance(x, int) and isinstance(y, int):
+            self.move(x, y)
+
+    def capture_window_state(self) -> dict:
+        geo = self.geometry()
+        return {
+            "x": geo.x(),
+            "y": geo.y(),
+            "width": geo.width(),
+            "height": geo.height(),
+            "splitter_sizes": self._splitter.sizes(),
+        }
+
+    def sync_ui_from_config(self) -> None:
+        stockfish = self.cfg.training_opponent == "stockfish"
+        self.btn_stockfish.blockSignals(True)
+        self.btn_stockfish.setChecked(stockfish)
+        self.btn_stockfish.blockSignals(False)
+        mode = "Stockfish training" if stockfish else "self-play"
+        self.subtitle.setText(mode)
+
+    def shutdown_training(self) -> None:
+        self._event_timer.stop()
+        if self._grid_dialog is not None:
+            self._grid_dialog.close()
+        for dlg in list(self._solo_dialogs.values()):
+            dlg.close()
+        if self.trainer_thread and self.trainer_thread.orchestrator:
+            self.trainer_thread.orchestrator.stop()
+        if self.trainer_thread:
+            self.trainer_thread.requestInterruption()
+            self.trainer_thread.wait(5000)
+
+    def prepare_seamless_restart(self, reason: str) -> None:
+        self._pending_restart = True
+        self.status.showMessage(f"Refreshing session — {reason}…")
+        save_session(cfg=self.cfg, window=self.capture_window_state())
+        self.shutdown_training()
+        from az.keepalive import allow_sleep
+
+        allow_sleep()
 
     def _on_assets_ready(self) -> None:
         brain = resolve_brain_path()
@@ -251,11 +318,12 @@ class MainWindow(QMainWindow):
         for dlg in self._solo_dialogs.values():
             dlg.on_game_finished(game)
         self.metrics.on_game_finished(game.agent_score)
+        self.games_panel.add_game(game)
         if gid == self._focused_game_id:
-            self.games_panel.add_game(game)
             self._ply_token += 1
             token = self._ply_token
-            final_fen = self._game_states[gid].fen if gid in self._game_states else chess.STARTING_FEN
+            st = self._game_states.get(gid)
+            final_fen = st.fen if st is not None else chess.STARTING_FEN
             self._latest_post_fen = final_fen
             self.board_view.set_fen(final_fen, animated=False)
             self.board_view.show_result_overlay(self._result_to_text(game.result))
@@ -416,12 +484,11 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def closeEvent(self, event):
-        self._event_timer.stop()
-        if self.trainer_thread and self.trainer_thread.orchestrator:
-            self.trainer_thread.orchestrator.stop()
-        if self.trainer_thread:
-            self.trainer_thread.requestInterruption()
-            self.trainer_thread.wait(5000)
-        from az.keepalive import allow_sleep
-        allow_sleep()
+        if not self._pending_restart:
+            save_session(cfg=self.cfg, window=self.capture_window_state())
+        self.shutdown_training()
+        if not self._pending_restart:
+            from az.keepalive import allow_sleep
+
+            allow_sleep()
         super().closeEvent(event)

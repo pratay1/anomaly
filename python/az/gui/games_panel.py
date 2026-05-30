@@ -27,12 +27,16 @@ class GamesPanel(QGroupBox):
 
     def add_game(self, game: GameFinished) -> None:
         self._games.insert(0, game)
-        if len(self._games) > self._max_items:
-            self._games.pop()
-        text = f"{game.result:>4}  ·  {game.plies:3} plies  ·  {game.examples_count} pos"
+        text = (
+            f"G{game.game_id + 1}  {game.result:>4}  ·  "
+            f"{game.plies:3} plies  ·  {game.examples_count} pos"
+        )
         item = QListWidgetItem(text)
         item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.list.insertItem(0, item)
+        while len(self._games) > self._max_items:
+            self._games.pop()
+            self.list.takeItem(self.list.count() - 1)
 
     def _on_click(self, item: QListWidgetItem) -> None:
         row = self.list.row(item)

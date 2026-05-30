@@ -21,6 +21,8 @@ def test_metrics_panel_autoranges_loss_plots(qtbot):
     y_min, y_max = policy_vb.viewRange()[1]
     assert y_max > 1.0
     assert y_min < 6.3
+    assert len(panel._series["policy_loss"]) == 1
+    assert panel._fills["policy_loss"] is None
 
     lr_vb = panel._plots["lr"].getViewBox()
     lr_min, lr_max = lr_vb.viewRange()[1]

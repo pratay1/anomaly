@@ -72,6 +72,7 @@ METRIC_COLORS = {
     "lr": "#6a6a6a",
     "games_per_min": "#8a8a8a",
     "win_rate": "#a8a8a8",
+    "memory_mb": "#909090",
 }
 
 DARK_STYLESHEET = f"""
