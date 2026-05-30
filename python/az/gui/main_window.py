@@ -50,34 +50,53 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
-        root.setContentsMargins(12, 12, 12, 8)
-        root.setSpacing(0)
+        root.setContentsMargins(14, 14, 14, 10)
+        root.setSpacing(12)
 
         left = QVBoxLayout()
         left.setSpacing(10)
-        left.setContentsMargins(0, 0, 8, 0)
+        left.setContentsMargins(0, 0, 0, 0)
 
-        title_row = QVBoxLayout()
-        title_row.setSpacing(2)
+        hero_card = QFrame()
+        hero_card.setObjectName("hero_card")
+        hero_layout = QVBoxLayout(hero_card)
+        hero_layout.setContentsMargins(16, 14, 16, 14)
+        hero_layout.setSpacing(10)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+        title_stack = QVBoxLayout()
+        title_stack.setSpacing(2)
         self.title = QLabel("Anomaly")
-        self.title.setObjectName("title")
+        self.title.setObjectName("hero_title")
         mode_label = (
             "Stockfish training"
             if self.cfg.training_opponent == "stockfish"
             else "self-play"
         )
-        subtitle = QLabel(f"{mode_label}")
-        subtitle.setObjectName("subtitle")
+        subtitle = QLabel(f"AlphaZero · {mode_label}")
+        subtitle.setObjectName("hero_subtitle")
         self.subtitle = subtitle
-        title_row.addWidget(self.title)
-        title_row.addWidget(subtitle)
-        left.addLayout(title_row)
+        title_stack.addWidget(self.title)
+        title_stack.addWidget(subtitle)
+        title_row.addLayout(title_stack)
+        title_row.addStretch()
+        self.mode_chip = QLabel("Live training")
+        self.mode_chip.setObjectName("hero_chip")
+        title_row.addWidget(self.mode_chip, alignment=Qt.AlignmentFlag.AlignTop)
+        hero_layout.addLayout(title_row)
+
+        self.status_chip = QLabel("Preparing assets")
+        self.status_chip.setObjectName("status_chip")
+        hero_layout.addWidget(self.status_chip, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        left.addWidget(hero_card)
 
         self.assets = PieceAssetManager(self)
         board_frame = QFrame()
         board_frame.setObjectName("board_frame")
         board_layout = QVBoxLayout(board_frame)
-        board_layout.setContentsMargins(6, 6, 6, 6)
+        board_layout.setContentsMargins(8, 8, 8, 8)
         self.board_view = BoardView(self.assets, anim_ms=self.cfg.board_anim_ms)
         self.board_view.setMinimumSize(440, 440)
         board_layout.addWidget(self.board_view)
@@ -89,14 +108,17 @@ class MainWindow(QMainWindow):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         self.btn_play = QPushButton("Play vs Brain")
+        self.btn_play.setObjectName("primary_button")
         self.btn_play.clicked.connect(self._play_vs_ckpt)
         btn_row.addWidget(self.btn_play, stretch=1)
         self.btn_grid = QPushButton("Game Grid")
+        self.btn_grid.setObjectName("secondary_button")
         self.btn_grid.clicked.connect(self._show_game_grid)
         btn_row.addWidget(self.btn_grid, stretch=1)
         left.addLayout(btn_row)
 
         self.btn_stockfish = QPushButton("Train Against Stockfish")
+        self.btn_stockfish.setObjectName("toggle_button")
         self.btn_stockfish.setCheckable(True)
         self.btn_stockfish.setChecked(self.cfg.training_opponent == "stockfish")
         self.btn_stockfish.setToolTip(
@@ -182,7 +204,8 @@ class MainWindow(QMainWindow):
         self.btn_stockfish.setChecked(stockfish)
         self.btn_stockfish.blockSignals(False)
         mode = "Stockfish training" if stockfish else "self-play"
-        self.subtitle.setText(mode)
+        self.subtitle.setText(f"AlphaZero · {mode}")
+        self.mode_chip.setText(mode)
 
     def shutdown_training(self) -> None:
         self._event_timer.stop()
@@ -199,6 +222,7 @@ class MainWindow(QMainWindow):
     def prepare_seamless_restart(self, reason: str) -> None:
         self._pending_restart = True
         self.status.showMessage(f"Refreshing session — {reason}…")
+        self.status_chip.setText("Refreshing session")
         save_session(cfg=self.cfg, window=self.capture_window_state())
         self.shutdown_training()
         from az.keepalive import allow_sleep
@@ -208,6 +232,7 @@ class MainWindow(QMainWindow):
     def _on_assets_ready(self) -> None:
         brain = resolve_brain_path()
         self.status.showMessage(f"Assets ready. Brain: {brain.name}. Starting training…")
+        self.status_chip.setText(f"Brain {brain.name}")
         self.trainer_thread = TrainerOrchestratorThread(self.cfg)
         o = self.trainer_thread.orchestrator
         o.checkpoint_saved.connect(
@@ -255,6 +280,7 @@ class MainWindow(QMainWindow):
 
     def _on_training_error_impl(self, message: str) -> None:
         self.status.showMessage(f"Training error (continuing): {message}")
+        self.status_chip.setText("Training warning")
         orch = self.trainer_thread.orchestrator if self.trainer_thread else None
         if orch is not None and self.cfg.training_opponent == "stockfish":
             orch.restart_stockfish()
@@ -269,6 +295,7 @@ class MainWindow(QMainWindow):
         self.status.showMessage(
             f"Iteration {event.iteration} complete · brain updated: {event.brain_path}"
         )
+        self.status_chip.setText(f"Iteration {event.iteration}")
         for gid in range(self._active_game_count()):
             self._game_states[gid] = GameState()
         if self._grid_dialog is not None:
@@ -287,6 +314,7 @@ class MainWindow(QMainWindow):
 
     def _on_train_impl(self, step: TrainStep) -> None:
         self.metrics.on_train_step(step)
+        self.status_chip.setText(f"Step {step.step}")
         self.status.showMessage(
             f"Step {step.step} | loss {step.total_loss:.4f} | lr {step.lr:.5f}"
         )
@@ -319,6 +347,7 @@ class MainWindow(QMainWindow):
             dlg.on_game_finished(game)
         self.metrics.on_game_finished(game.agent_score)
         self.games_panel.add_game(game)
+        self.status_chip.setText(f"Game {gid + 1} finished")
         if gid == self._focused_game_id:
             self._ply_token += 1
             token = self._ply_token
@@ -441,6 +470,7 @@ class MainWindow(QMainWindow):
             self.board_view.clear_last_move()
             self.board_view.set_fen(st.fen, animated=False)
         self.status.showMessage(f"Focused on game {game_id + 1}")
+        self.status_chip.setText(f"Game {game_id + 1} focused")
 
     def _open_solo_game(self, game_id: int) -> None:
         if game_id in self._solo_dialogs and self._solo_dialogs[game_id].isVisible():
@@ -469,7 +499,9 @@ class MainWindow(QMainWindow):
 
         mode = "Stockfish training" if enabled else "self-play"
         self.subtitle.setText(f"AlphaZero · {mode}")
+        self.mode_chip.setText(mode)
         self._reset_training_game_states()
+        self.status_chip.setText(mode)
         self.status.showMessage(f"{mode} enabled — {self.cfg.num_workers} parallel workers")
 
     def _play_vs_ckpt(self) -> None:

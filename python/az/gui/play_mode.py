@@ -6,7 +6,15 @@ from pathlib import Path
 import chess
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor, QPen
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
 import az._az_core as core
 from az.brain import align_cfg_with_brain, load_brain, resolve_brain_path
@@ -32,15 +40,34 @@ class PlayVsNetDialog(QDialog):
         self.run_dir = Path(run_dir) if run_dir else resolve_brain_path().parent
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header = QFrame()
+        header.setObjectName("dialog_card")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(14, 12, 14, 12)
+        header_layout.setSpacing(4)
+        title = QLabel("Play vs AlphaZero")
+        title.setObjectName("dialog_title")
         brain_path = resolve_brain_path()
         self.info_label = QLabel(f"Brain: {brain_path.name}")
-        layout.addWidget(self.info_label)
+        self.info_label.setObjectName("dialog_subtitle")
+        header_layout.addWidget(title)
+        header_layout.addWidget(self.info_label)
+        layout.addWidget(header)
 
         self.board_view = BoardView(assets)
-        layout.addWidget(self.board_view, stretch=1)
+        board_frame = QFrame()
+        board_frame.setObjectName("board_frame")
+        board_layout = QVBoxLayout(board_frame)
+        board_layout.setContentsMargins(8, 8, 8, 8)
+        board_layout.addWidget(self.board_view)
+        layout.addWidget(board_frame, stretch=1)
 
         status_row = QHBoxLayout()
         self.status_label = QLabel("Your turn (White)")
+        self.status_label.setObjectName("dialog_subtitle")
         status_row.addWidget(self.status_label, stretch=1)
         self.btn_reset = QPushButton("New Game")
         self.btn_reset.clicked.connect(self._reset_game)

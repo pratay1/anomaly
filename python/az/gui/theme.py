@@ -1,4 +1,4 @@
-"""Dark monochrome palette — premium understated UI."""
+"""Dark monochrome palette for the Qt UI."""
 
 # Surfaces
 BG_DEEPEST = "#0a0a0a"
@@ -7,6 +7,7 @@ BG_SECONDARY = "#1e1e1e"
 BG_ELEVATED = "#252525"
 BG_INTERACTIVE = "#2a2a2a"
 BG_GUNMETAL = "#333333"
+BORDER_HALO = "#454545"
 BORDER_SUBTLE = "#2a2a2a"
 BORDER_MUTED = "#383838"
 
@@ -82,42 +83,79 @@ QMainWindow, QWidget {{
     font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
     font-size: 13px;
 }}
+QDialog {{
+    background-color: {BG_PRIMARY};
+    color: {TEXT_PRIMARY};
+}}
+QFrame#hero_card, QFrame#panel_card, QFrame#dialog_card {{
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {BG_SECONDARY},
+        stop:1 {BG_DEEPEST});
+    border: 1px solid {BORDER_SUBTLE};
+    border-radius: 14px;
+}}
+QFrame#hero_card {{
+    padding: 2px;
+}}
 QGroupBox {{
     background-color: {BG_SECONDARY};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 8px;
-    margin-top: 10px;
-    padding: 16px 12px 12px 12px;
+    border-radius: 12px;
+    margin-top: 12px;
+    padding: 18px 14px 14px 14px;
     font-weight: 600;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
-    left: 12px;
+    left: 14px;
     padding: 0 6px;
     color: {TEXT_SECONDARY};
+    letter-spacing: 0.3px;
 }}
 QPushButton {{
     background-color: {BG_INTERACTIVE};
     border: 1px solid {BORDER_MUTED};
-    border-radius: 6px;
-    padding: 10px 20px;
+    border-radius: 10px;
+    padding: 10px 16px;
     color: {TEXT_PRIMARY};
 }}
 QPushButton:hover {{
     background-color: {BG_GUNMETAL};
+    border-color: {BORDER_HALO};
 }}
 QPushButton:pressed {{
     background-color: {BG_ELEVATED};
 }}
+QPushButton:checked {{
+    background-color: {BG_ELEVATED};
+    border-color: {BORDER_HALO};
+}}
+QPushButton#primary_button {{
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #343434, stop:1 #232323);
+    border: 1px solid #4a4a4a;
+    font-weight: 600;
+}}
+QPushButton#primary_button:hover {{
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #3b3b3b, stop:1 #2a2a2a);
+}}
+QPushButton#secondary_button, QPushButton#toggle_button {{
+    background-color: {BG_INTERACTIVE};
+}}
+QPushButton#toggle_button {{
+    text-align: left;
+    padding-left: 14px;
+}}
 QListWidget {{
     background-color: {BG_DEEPEST};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 6px;
+    border-radius: 10px;
     color: {TEXT_PRIMARY};
 }}
 QListWidget::item {{
-    padding: 6px 8px;
-    border-radius: 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
 }}
 QListWidget::item:selected {{
     background-color: {BG_GUNMETAL};
@@ -126,6 +164,36 @@ QListWidget::item:selected {{
 QListWidget::item:alternate {{
     background-color: {BG_ELEVATED};
 }}
+QLabel#hero_title {{
+    font-size: 24px;
+    font-weight: 700;
+    color: {TEXT_PRIMARY};
+    letter-spacing: 0.4px;
+}}
+QLabel#hero_subtitle {{
+    font-size: 11px;
+    color: {TEXT_SECONDARY};
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+}}
+QLabel#hero_chip, QLabel#status_chip {{
+    background-color: {BG_INTERACTIVE};
+    border: 1px solid {BORDER_MUTED};
+    border-radius: 999px;
+    color: {TEXT_SECONDARY};
+    padding: 5px 10px;
+    font-size: 10px;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+}}
+QLabel#dialog_title {{
+    font-size: 16px;
+    font-weight: 600;
+    color: {TEXT_PRIMARY};
+}}
+QLabel#dialog_subtitle {{
+    color: {TEXT_SECONDARY};
+}}
 QGroupBox#metrics_panel, QGroupBox#games_panel {{
     background-color: {BG_SECONDARY};
 }}
@@ -133,17 +201,18 @@ QStatusBar {{
     background-color: {BG_DEEPEST};
     color: {TEXT_SECONDARY};
     border-top: 1px solid {BORDER_SUBTLE};
+    font-size: 11px;
 }}
 QLabel#title {{
     font-size: 22px;
-    font-weight: 600;
+    font-weight: 700;
     color: {TEXT_PRIMARY};
-    letter-spacing: 0.8px;
+    letter-spacing: 0.5px;
 }}
 QLabel#subtitle {{
     font-size: 11px;
-    color: {TEXT_DISABLED};
-    letter-spacing: 1.2px;
+    color: {TEXT_SECONDARY};
+    letter-spacing: 1.0px;
     text-transform: uppercase;
 }}
 QLabel#mcts_status {{
@@ -152,10 +221,10 @@ QLabel#mcts_status {{
 }}
 QFrame#board_frame {{
     background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #131313, stop:1 {BG_DEEPEST});
+        stop:0 #151515, stop:1 {BG_DEEPEST});
     border: 1px solid {BORDER_MUTED};
-    border-radius: 12px;
-    padding: 8px;
+    border-radius: 16px;
+    padding: 10px;
 }}
 QGroupBox#mcts_panel {{
     padding-top: 14px;
@@ -164,7 +233,7 @@ QGroupBox#mcts_panel {{
 QFrame#mcts_card {{
     background-color: {BG_ELEVATED};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 6px;
+    border-radius: 8px;
 }}
 QFrame#mcts_card:hover {{
     border-color: {BORDER_MUTED};
@@ -173,7 +242,7 @@ QFrame#mcts_card:hover {{
 QFrame#mcts_card_skeleton {{
     background-color: {BG_ELEVATED};
     border: 1px dashed {BORDER_SUBTLE};
-    border-radius: 6px;
+    border-radius: 8px;
 }}
 QFrame#mcts_card_skeleton QLabel#mcts_move,
 QFrame#mcts_card_skeleton QLabel#mcts_stat {{
@@ -183,7 +252,7 @@ QLabel#mcts_move {{
     color: {TEXT_PRIMARY};
     font-size: 13px;
     font-weight: 600;
-    font-family: 'Consolas', 'Cascadia Mono', monospace;
+    font-family: 'Cascadia Mono', 'Consolas', monospace;
 }}
 QLabel#mcts_stat {{
     color: {TEXT_DISABLED};
@@ -192,5 +261,12 @@ QLabel#mcts_stat {{
 QSplitter::handle {{
     background-color: {BORDER_SUBTLE};
     width: 2px;
+}}
+QToolTip {{
+    background-color: {BG_GUNMETAL};
+    color: {TEXT_PRIMARY};
+    border: 1px solid {BORDER_HALO};
+    padding: 6px 8px;
+    border-radius: 6px;
 }}
 """

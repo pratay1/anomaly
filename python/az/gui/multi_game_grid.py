@@ -6,6 +6,7 @@ import chess
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -51,17 +52,28 @@ class MultiGameGridDialog(QDialog):
         self._labels: dict[int, QLabel] = {}
 
         layout = QVBoxLayout(self)
-        header = QHBoxLayout()
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        header_card = QFrame()
+        header_card.setObjectName("dialog_card")
+        header_layout = QHBoxLayout(header_card)
+        header_layout.setContentsMargins(14, 12, 14, 12)
+        header_layout.setSpacing(8)
         self.iteration_label = QLabel("Iteration: —")
-        header.addWidget(self.iteration_label)
-        header.addStretch()
+        self.iteration_label.setObjectName("dialog_title")
+        header_layout.addWidget(self.iteration_label)
+        header_layout.addStretch()
         close_btn = QPushButton("Close")
+        close_btn.setObjectName("secondary_button")
         close_btn.clicked.connect(self.close)
-        header.addWidget(close_btn)
-        layout.addLayout(header)
+        header_layout.addWidget(close_btn)
+        layout.addWidget(header_card)
 
         grid_widget = QWidget()
         grid = QGridLayout(grid_widget)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
         cols = 3 if num_games > 3 else num_games
         for gid in range(num_games):
             cell = QVBoxLayout()
