@@ -77,6 +77,7 @@ class MetricsPanel(QGroupBox):
     ):
         super().__init__("Metrics", parent)
         self.setObjectName("metrics_panel")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         layout = QGridLayout(self)
         layout.setContentsMargins(10, 14, 10, 10)
         layout.setSpacing(8)

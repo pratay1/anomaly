@@ -1,8 +1,8 @@
 {
-  "step": 400,
+  "step": 0,
   "win_rate": 0.0,
-  "iteration": 10,
-  "updated_at": "2026-05-30T22:10:45.695097+00:00",
+  "iteration": 0,
+  "updated_at": "2026-05-30T23:18:09.699345+00:00",
   "brain_path": "C:\\Users\\prata\\anomaly\\anomaly.pt",
-  "run_dir": "runs\\20260530_175807"
+  "run_dir": "runs\\20260530_191738"
 }

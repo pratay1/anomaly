@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import chess
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSplitter,
     QStatusBar,
     QVBoxLayout,
@@ -41,8 +45,8 @@ class MainWindow(QMainWindow):
         self.cfg.emit_selfplay_visits = True
         self._pending_restart = False
         self.setWindowTitle("Anomaly")
-        self.resize(1320, 820)
-        self.setMinimumSize(920, 620)
+        self.resize(1320, 900)
+        self.setMinimumSize(980, 760)
         if window_state:
             self._apply_window_state(window_state)
         self.setStyleSheet(DARK_STYLESHEET)
@@ -95,11 +99,19 @@ class MainWindow(QMainWindow):
         self.assets = PieceAssetManager(self)
         board_frame = QFrame()
         board_frame.setObjectName("board_frame")
+        board_frame.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        board_shadow = QGraphicsDropShadowEffect(board_frame)
+        board_shadow.setBlurRadius(24)
+        board_shadow.setOffset(0, 3)
+        board_shadow.setColor(QColor(0, 0, 0, 140))
+        board_frame.setGraphicsEffect(board_shadow)
         board_layout = QVBoxLayout(board_frame)
-        board_layout.setContentsMargins(8, 8, 8, 8)
+        board_layout.setContentsMargins(5, 5, 5, 5)
         self.board_view = BoardView(self.assets, anim_ms=self.cfg.board_anim_ms)
-        self.board_view.setMinimumSize(440, 440)
-        board_layout.addWidget(self.board_view)
+        board_layout.addWidget(self.board_view, stretch=1)
         left.addWidget(board_frame, stretch=1)
 
         self.mcts_panel = MCTSPanel(self.board_view)
@@ -129,22 +141,42 @@ class MainWindow(QMainWindow):
 
         right = QVBoxLayout()
         right.setSpacing(10)
-        right.setContentsMargins(8, 0, 0, 0)
+        right.setContentsMargins(0, 0, 0, 0)
         self.metrics = MetricsPanel(
             self.cfg.metrics_window,
             memory_interval_ms=self.cfg.memory_sample_interval_ms,
             memory_window=self.cfg.memory_metrics_window,
         )
         self.games_panel = GamesPanel()
-        right.addWidget(self.metrics, stretch=3)
-        right.addWidget(self.games_panel, stretch=2)
+        right.addWidget(self.metrics)
+        right.addWidget(self.games_panel, stretch=1)
+
+        right_scroll = QScrollArea()
+        right_scroll.setObjectName("metrics_scroll")
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        right_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        right_host = QWidget()
+        right_host.setLayout(right)
+        right_scroll.setWidget(right_host)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self._splitter = splitter
         splitter.setHandleWidth(3)
-        lw, rw = QWidget(), QWidget()
+        splitter.setChildrenCollapsible(False)
+        lw, rw = QWidget(), right_scroll
         lw.setLayout(left)
-        rw.setLayout(right)
+        lw.setMinimumWidth(500)
+        lw.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        rw.setMinimumWidth(360)
         splitter.addWidget(lw)
         splitter.addWidget(rw)
         splitter.setSizes([720, 520])

@@ -5,12 +5,12 @@ from PyQt6.QtCore import QPointF, QPropertyAnimation, Qt, QVariantAnimation, pyq
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
 from PyQt6.QtSvgWidgets import QGraphicsSvgItem
 from PyQt6.QtWidgets import (
-    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsSimpleTextItem,
     QGraphicsView,
+    QSizePolicy,
 )
 
 from az.gui.board_anim import animate_piece, detect_move, is_same_piece_slide
@@ -75,12 +75,10 @@ class BoardView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setStyleSheet("background: transparent; border: none;")
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        self.setGraphicsEffect(shadow)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
 
         self._heat_overlays: dict[int, QGraphicsRectItem] = {}
         self._result_overlay_items: list = []

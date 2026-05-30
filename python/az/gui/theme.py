@@ -197,6 +197,13 @@ QLabel#dialog_subtitle {{
 QGroupBox#metrics_panel, QGroupBox#games_panel {{
     background-color: {BG_SECONDARY};
 }}
+QScrollArea#metrics_scroll {{
+    background: transparent;
+    border: none;
+}}
+QScrollArea#metrics_scroll > QWidget > QWidget {{
+    background: transparent;
+}}
 QStatusBar {{
     background-color: {BG_DEEPEST};
     color: {TEXT_SECONDARY};
@@ -224,7 +231,7 @@ QFrame#board_frame {{
         stop:0 #151515, stop:1 {BG_DEEPEST});
     border: 1px solid {BORDER_MUTED};
     border-radius: 16px;
-    padding: 10px;
+    padding: 0px;
 }}
 QGroupBox#mcts_panel {{
     padding-top: 14px;
